@@ -36,7 +36,7 @@ If one of the updates forces HA to reboot, the automation will restart after the
 ### Import blueprint tools in Home Assistant (easier)
 Just click in the following button and follow it's steps:
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fcommunity.home-assistant.io%2Ft%2Fscheduled-auto-update-for-home-assistant%2F459281)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fedwardtfn%2Fha_auto_update_scheduled%2Fblob%2Fmain%2Fauto_update_scheduled.yaml)
 
 ### Manual
 1. Open Home Assistant interface
