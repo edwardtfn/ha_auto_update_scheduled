@@ -8,7 +8,7 @@ blueprint:
     
     IMPORTANT => Use under your own risk. Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.'
   domain: automation
-  source_url: https://community.home-assistant.io/t/scheduled-auto-update-for-home-assistant/459281
+  source_url: https://github.com/edwardtfn/ha_auto_update_scheduled/blob/main/auto_update_scheduled.yaml
   input:
     backup_bool:
       name: Create a full backup before start the updates?
@@ -31,7 +31,7 @@ blueprint:
       selector:
         entity:
           multiple: false
-          domain: [schedule]
+          domain: schedule
     schedule_monthday:
       name: Earliest day in the month to update Home Assistant
       description: 'Usually a new major version of Home Assistant is available on the begining of every month. Some people consider those release as not stable enough and prefer to avoid those versions, not updating the system until the mid of the month (day 15).
@@ -44,22 +44,6 @@ blueprint:
           max: 31
           step: 1
           mode: slider
-#    min_update_age:
-#      name: Minimum age (in days) of an update to be applied
-#      description: 'Use this to avoid updating on the first few days after an update is released or 0 for not waiting. You might want to wait until the new update is tested by other users and give some time for critical bugs to be fixed. For that, add the number of days you want to wait.
-#
-#        Avoid waiting too much (selecting a higher number of days) as new updates will be resseting the time count and it might happen that some system (with frequent releases, like the core components) won''t be updated ever. It''s higly recomended to not wait more than a week (7 days) or so.
-#
-#        Note => 0 days will allow the system to apply updated indempendetly of it''s age.
-#
-#        Note => An update entity might not include the time zone, which will cause a small deviation on the time offset (age) calculation.'
-#      default: 0
-#      selector:
-#        number:
-#          min: 0
-#          max: 31
-#          step: 1
-#          mode: slider
     update_exclusions:
       name: (optional) Exclusions
       description: 'Select the items that should NOT be included on the automated updates.
@@ -105,41 +89,20 @@ blueprint:
       selector:
         entity:
           multiple: true
-          domain: [input_boolean, binary_sensor, switch]
+          domain: 
+            - input_boolean
+            - binary_sensor
+            - switch
 
 
 mode: single
 max_exceeded: warning
 
 trigger_variables:
-  input_min_update_age: 0 ## !input min_update_age
   input_schedule_monthday: !input schedule_monthday
   input_update_exclusions: !input update_exclusions
-  input_update_exclusions_processed: >-
-    {% if input_update_exclusions %}
-      {{ input_update_exclusions }}
-    {% else %}
-      [ ]
-    {% endif %}
-  updates_list: >-
-    {% if input_min_update_age == 0 %}
-      {{ states.update | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions_processed) | map(attribute='entity_id') | list }}
-    {% else %}
-      {% set output = namespace(sensors=[]) %}
-      {% for state in (states.update | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions_processed)) %}
-        {% if as_timestamp(state.last_changed) <= as_timestamp(now()-timedelta(days=input_min_update_age)) %}
-          {% set output.sensors = output.sensors + [state.entity_id] %}
-        {% endif %}
-      {% endfor %}
-      {{ output.sensors | list }}
-    {% endif %}
+  updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
   input_pause_entities: !input pause_entities
-  input_pause_entities_selected: >-
-    {% if input_pause_entities %}
-      true
-    {% else %}
-      false
-    {% endif %}
 
 trigger:
   - id: HA Schedule based
@@ -151,7 +114,7 @@ trigger:
   - id: New update
     platform: template
     value_template: >-
-      {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions_processed) | list | count | int(0)) > 0 }}
+      {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) > 0 }}
   - id: New day
     platform: template
     value_template: >-
@@ -160,7 +123,7 @@ trigger:
 condition:
   - condition: template
     value_template: >-
-      {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions_processed) | list | count | int(0)) > 0 }}
+      {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) > 0 }}
   - condition: template
     value_template: >-
       {{ (now().day >= ((input_schedule_monthday) | int(0))) }}
@@ -169,18 +132,16 @@ condition:
     state: "on"
   - condition: or
     conditions:
-      - condition: template
-        value_template: >-
-          {{ ( input_pause_entities_selected == false ) }}
+      - "{{ not input_pause_entities_selected }}"
       - condition: state
         entity_id: !input pause_entities
         state: 'off'
 
 variables:
-  input_min_update_age: 0 ## !input min_update_age
   input_schedule_monthday: !input schedule_monthday
   input_backup_bool: !input backup_bool
   input_restart_bool: !input restart_bool
+  input_update_exclusions: !input update_exclusions
   core_update_entity: >-
     {% for u in integration_entities('hassio') | select('search', '^update[.]')
             if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
@@ -191,27 +152,7 @@ variables:
             if (device_attr(u, 'identifiers') | first)[1] == 'OS' %}
         {{ u }}
     {% endfor %}
-  input_update_exclusions: !input update_exclusions
-  input_update_exclusions_processed: >-
-    {% if input_update_exclusions %}
-      {{ input_update_exclusions }}
-    {% else %}
-      [ ]
-    {% endif %}
-  updates_list: >-
-    {% if input_min_update_age == 0 %}
-      {{ states.update | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions_processed) | map(attribute='entity_id') | list }}
-    {% else %}
-      {% set output = namespace(sensors=[]) %}
-      {% for state in (states.update | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions_processed)) %}
-        {% if as_timestamp(state.last_changed) <= as_timestamp(now()-timedelta(days=input_min_update_age)) %}
-          {% set output.sensors = output.sensors + [state.entity_id] %}
-        {% endif %}
-      {% endfor %}
-      {{ output.sensors | list }}
-    {% endif %}
-#  all_update_entities: >-
-#    {{ states.update | map(attribute='name') | list }}
+  updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
 action:
   ########## Starting ##########
@@ -225,10 +166,9 @@ action:
         Variables: 
           input_backup_bool: {{ input_backup_bool }}, 
           input_restart_bool: {{ input_restart_bool }}, 
-          input_min_update_age: {{ input_min_update_age}},
           input_schedule_monthday: {{ input_schedule_monthday }}, 
           input_update_exclusions: {{ input_update_exclusions }},
-          input_update_exclusions_processed: {{ input_update_exclusions_processed }},
+          input_update_exclusions: {{ input_update_exclusions }},
           updates_list: {{ updates_list }}
 
   - alias: "Logbook - A new update is available"
@@ -251,7 +191,7 @@ action:
         - {{ states.update 
           | selectattr('state','eq','on') 
           | selectattr('entity_id', 'in', updates_list)
-          | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+          | rejectattr('entity_id', 'in', input_update_exclusions)
           | map(attribute='name') | list | join(' 
 
         - ') }}
@@ -276,9 +216,7 @@ action:
   - alias: "Backup"
     continue_on_error: true
     if:
-      - condition: template
-        value_template: >-
-          {{ ( input_backup_bool ) }}
+      - "{{ input_backup_bool }}"
 #          {{ ( input_backup_bool ) and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.backup_state', 'last_backup'))) > 7200) }}
     then:
       - alias: "Logbook - Backing up"
@@ -304,6 +242,8 @@ action:
           name: Auto-update
           entity_id: '{{ this.entity_id }}'
           message: Backup triggered.
+      - alias: "Give 1h for the backup" # There's no sensor for when the backup finishes
+        delay: 3600
     else: []
 
   ########## Update add-ons (Standard) ##########
@@ -323,7 +263,7 @@ action:
                   | selectattr('entity_id', 'in', updates_list)
                   | rejectattr('entity_id', 'in', core_update_entity)
                   | rejectattr('entity_id', 'in', os_update_entity)
-                  | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
                   | map(attribute='entity_id') 
                   | list | count | int(0) ) > 0
                   }}
@@ -342,7 +282,7 @@ action:
                 | selectattr('entity_id', 'in', updates_list)
                 | rejectattr('entity_id', 'in', core_update_entity)
                 | rejectattr('entity_id', 'in', os_update_entity)
-                | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+                | rejectattr('entity_id', 'in', input_update_exclusions)
                 | map(attribute='entity_id') 
                 | list
                 }}
@@ -382,7 +322,7 @@ action:
                   | selectattr('entity_id', 'in', updates_list)
                   | selectattr('entity_id', 'in', core_update_entity)
                   | rejectattr('entity_id', 'in', os_update_entity)
-                  | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
                   | map(attribute='entity_id') 
                   | list | count | int(0) ) > 0
                   }}
@@ -401,7 +341,7 @@ action:
                 | selectattr('entity_id', 'in', updates_list)
                 | selectattr('entity_id', 'in', core_update_entity)
                 | rejectattr('entity_id', 'in', os_update_entity)
-                | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+                | rejectattr('entity_id', 'in', input_update_exclusions)
                 | map(attribute='entity_id') 
                 | list
                 }}
@@ -420,7 +360,7 @@ action:
             entity_id: '{{ pending_update_list[0] }}'
         - alias: "Update - Core - Wait"
           continue_on_error: true
-          wait_template:  "{{ is_state(pending_update_list[0], 'off') }}"
+          wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
           continue_on_timeout: true
           timeout: '3600'
 
@@ -441,7 +381,7 @@ action:
                   | selectattr('entity_id', 'in', updates_list)
                   | rejectattr('entity_id', 'in', core_update_entity)
                   | selectattr('entity_id', 'in', os_update_entity)
-                  | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
                   | map(attribute='entity_id') 
                   | list | count | int(0) ) > 0
                   }}
@@ -460,7 +400,7 @@ action:
                 | selectattr('entity_id', 'in', updates_list)
                 | rejectattr('entity_id', 'in', core_update_entity)
                 | selectattr('entity_id', 'in', os_update_entity)
-                | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+                | rejectattr('entity_id', 'in', input_update_exclusions)
                 | map(attribute='entity_id') 
                 | list
                 }}
@@ -507,14 +447,14 @@ action:
             {{ states.update 
             | selectattr('state','eq','on') 
             | selectattr('entity_id', 'in', updates_list)
-            | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+            | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id') 
             | list 
             }}
       - alias: "Update - Remaining - Wait"
         continue_on_error: true
         wait_template: >-
-          {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions_processed) | list | count | int(0)) < 1 }}
+          {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) < 1 }}
         continue_on_timeout: true
         timeout: '3600'
 
@@ -537,7 +477,7 @@ action:
         - {{ states.update 
           | selectattr('state','eq','on')
           | selectattr('entity_id', 'in', updates_list)
-          | rejectattr('entity_id', 'in', input_update_exclusions_processed)
+          | rejectattr('entity_id', 'in', input_update_exclusions)
           | map(attribute='name') | list | join(' 
 
         - ') }}
@@ -546,7 +486,7 @@ action:
   - variables:
       restart_entities: >-
         {% set output = namespace(entities=[]) %}
-        {% for state in (states.update | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions_processed)) %}
+        {% for state in (states.update | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions)) %}
           {% if is_state_attr(state.entity_id, 'release_summary', "<ha-alert alert-type='error'>Restart of Home Assistant required</ha-alert>") %}
             {% set output.entities = output.entities + [state.entity_id] %}
           {% endif %}
@@ -568,9 +508,7 @@ action:
   - alias: "Restart"
     continue_on_error: true
     if:
-      - condition: template
-        value_template: >-
-          {{ ( input_restart_bool ) and (restart_count > 0) }}
+      - "{{ input_restart_bool and (restart_count > 0) }}"
     then:
       - alias: "Restart - Logbook - Restarting"
         continue_on_error: true
