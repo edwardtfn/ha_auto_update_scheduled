@@ -8,6 +8,8 @@ blueprint:
     
     IMPORTANT => Use under your own risk. Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.'
   domain: automation
+  homeassistant:
+    min_version: '2022.9.0'
   source_url: https://github.com/edwardtfn/ha_auto_update_scheduled/blob/main/auto_update_scheduled.yaml
   input:
     backup_bool:
