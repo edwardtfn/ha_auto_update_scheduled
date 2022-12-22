@@ -1,16 +1,26 @@
 blueprint:
   name: Home Assistant Auto-update on a schedule base
-  description: 'Update Home Assistant automatically when a new update is available.
-    
-    Note 1 => HACS updates NOT included. It may work if you enable "Experimental features" on your HACS integration or when HACS updates funcionality is released.
-    
-    Note 2 => Home Assistant may restart automatically as part of the update process.
-    
-    IMPORTANT => Use under your own risk. Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.'
+  description: >-
+    # Home Assistant Auto-update
+
+    Update Home Assistant automatically when a new update is available.
+
+
+
+    => HACS updates NOT included. It may work if you enable "[Experimental features](https://hacs.xyz/docs/configuration/options/#options)" on your HACS integration or when HACS updates funcionality is released.
+
+    => Home Assistant may restart automatically as part of the update process.
+
+
+    **IMPORTANT** => Use under your own risk. Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.
+
+
+
+    For questions and suggestions, please use [this thread in Home Assistant Community portal](https://community.home-assistant.io/t/scheduled-auto-update-for-home-assistant/459281).
   domain: automation
   homeassistant:
     min_version: '2022.9.0'
-  source_url: https://community.home-assistant.io/t/scheduled-auto-update-for-home-assistant/459281
+  source_url: https://raw.githubusercontent.com/edwardtfn/ha_auto_update_scheduled/main/auto_update_scheduled.yaml
   input:
     backup_bool:
       name: Create a full backup before start the updates?
@@ -18,15 +28,18 @@ blueprint:
       default: true
       selector:
         boolean:
+
     restart_bool:
       name: Force Home Assistant host to restart if required by any update?
       description: This won't affect updates where a restart is automatic, but for updates requiring a manual restart (quite common on HACS) this blueprint can automatically force a restart by the end of the updates.
       default: false
       selector:
         boolean:
+
     schedule_entity:
       name: Schedule entity
-      description: 'You can create an Schedule under Settings > Devices & Services > Helpers.
+      description: 'You can create an [Schedule](https://www.home-assistant.io/integrations/schedule) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
+
 
         Note => The schedule windows will define when an update will start. It is possible that a backup, an update or a restart process finishes after the schedule window, but new updates won''t stars outside the schedule windows.'
       default: [ ]
@@ -34,10 +47,12 @@ blueprint:
         entity:
           multiple: false
           domain: schedule
+
     schedule_monthday:
       name: Earliest day in the month to update Home Assistant
-      description: 'Usually a new major version of Home Assistant is available on the begining of every month. Some people consider those release as not stable enough and prefer to avoid those versions, not updating the system until the mid of the month (day 15).
-        
+      description: 'Usually a new major version of Home Assistant is available on the begining of every month. Some people consider those releases as not stable enough and prefer to avoid those versions, not updating the system until the mid of the month (day 15).
+
+
         Note => If you select a day higher than 28 the updates won''t run every month.'
       default: 1
       selector:
@@ -46,42 +61,49 @@ blueprint:
           max: 31
           step: 1
           mode: slider
+
     update_exclusions:
       name: (optional) Exclusions
       description: 'Select the items that should NOT be included on the automated updates.
-        
+
+
         => Use this if you want to keep some add-on on an specific version and avoid auto-updates to it.'
       default: [ ]
       selector:
         entity:
           multiple: true
           domain: update
+
     actions_pre_update:
       name: (optional) Pre-update actions
       description: 'Actions to execute before the backup or any update starts.
 
         You can use this to send notifications, turn on/off devices or activate scenes before starting the updates.
-      
+
+
         Note => Please be aware that all actions will run right before the update process, which can happens over-night. Take this in account when selecting your actions.
-        
-        Note => The variable "\{\{ pending_updates \}\}" is available for your automations and contains the list of pending updates.'
+
+        Note => The variable "\{\{ pending_updates \}\}" is available for your actions and contains the list of pending updates.'
       default: [ ]
       selector:
         action: {}
+
     actions_pos_update:
       name: (optional) Post-update actions
       description: 'Actions to execute AFTER the update process finishes.
 
         You can use this to send notifications, turn on/off devices or activate scenes after applying  the updates.
-      
+
+
         Note => Please be aware that all actions will run right before the update process, which can happens over-night. Take this in account when selecting your actions.
 
-        Note => The variable "\{\{ pending_updates \}\}" is available for your automations and contains the list of pending updates.
+        Note => The variable "\{\{ pending_updates \}\}" is available for your actions and contains the list of pending updates.
 
-        ** IMPORTANT ** => Some updates will automatically restart Home Assistant, causing the automation to interrupt before finishing, preventing the pos-updates actions to be executed. If you have critical actions to run after an update, consider including also in another automation based on Home Assistant start.'
+        **IMPORTANT** => Some updates will automatically restart Home Assistant, causing the automation to interrupt before finishing, preventing the pos-updates actions to be executed. If you have critical actions to run after an update, consider including also in another automation based on Home Assistant start.'
       default: [ ]
       selector:
         action: {}
+
     pause_entities:
       name: (Optional) Pause update entities
       description: 'You can select one or more entities to pause the updates. If any of the selected entities is "On" or "True" the system won''t be updated on the schedule time.
