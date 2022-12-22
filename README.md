@@ -36,7 +36,7 @@ If one of the updates forces HA to reboot, the automation will restart after the
 ### Import blueprint tools in Home Assistant (easier)
 Just click in the following button and follow it's steps:
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fcommunity.home-assistant.io%2Ft%2Fscheduled-auto-update-for-home-assistant%2F459281)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fedwardtfn%2Fha_auto_update_scheduled%2Fmain%2Fauto_update_scheduled.yaml)
 
 ### Manual
 1. Open Home Assistant interface
@@ -101,3 +101,6 @@ You can use this to hold your updates when you have a party at home, or when you
 
 
 ![image](https://user-images.githubusercontent.com/94725493/193578971-5981aa3b-06bc-4ceb-ae2a-f3149d8ad350.png)
+
+### Changes log
+Please take a look on the [log of commits](https://github.com/edwardtfn/ha_auto_update_scheduled/commits/main).
