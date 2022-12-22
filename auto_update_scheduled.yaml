@@ -1,7 +1,7 @@
 blueprint:
-  name: Home Assistant Auto-update on a schedule base
+  name: Home Assistant Auto-update on a schedule base (DEV)
   description: >-
-    # Home Assistant Auto-update
+    # Home Assistant Auto-update (DEV)
 
     Update Home Assistant automatically when a new update is available.
 
