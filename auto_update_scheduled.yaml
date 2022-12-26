@@ -706,7 +706,7 @@ action:
   - variables:
       restart_entities: >-
         {% set output = namespace(entities=[]) %}
-        {% for state in (states.update | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions)) %}
+        {% for state in states.update %}
           {% if is_state_attr(state.entity_id, 'release_summary', "<ha-alert alert-type='error'>Restart of Home Assistant required</ha-alert>") %}
             {% set output.entities = output.entities + [state.entity_id] %}
           {% endif %}
