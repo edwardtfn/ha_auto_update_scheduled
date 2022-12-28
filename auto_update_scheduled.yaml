@@ -7,12 +7,13 @@ blueprint:
 
 
 
-    => HACS updates NOT included. It may work if you enable "[Experimental features](https://hacs.xyz/docs/configuration/options/#options)" on your HACS integration or when HACS updates funcionality is released.
+    Attention:
 
-    => Home Assistant may restart automatically as part of the update process.
+    * HACS updates NOT included. It may work if you enable "[Experimental features](https://hacs.xyz/docs/configuration/options/#options)" on your HACS integration or when HACS updates funcionality is released.
 
+    * Home Assistant may restart automatically as part of the update process.
 
-    **IMPORTANT** => Use under your own risk. Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.
+    * **Use under your own risk!** Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.
 
 
 
@@ -64,7 +65,21 @@ blueprint:
 
     core_os_update_mode:
       name: Update mode for Home Assistant core and OS updates
-      description: Please select the update mode for Home Assistant core and Home Assistan OS updates.
+      description: >-
+        Please select the update mode for Home Assistant core and Home Assistan OS updates.
+
+        * All: All updates will be installed.
+
+        * Patches only:
+          ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
+          ❌ From 2022.11.x to 2022.12.x will be ignored (minor update).
+          ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
+        * Don't update: Ignore any update.
+#        * Major & minor only:
+#          ❌ From 2022.11.0 to 2022.11.3 will be ignored (patches).
+#          ✅ From 2022.11.x to 2022.12.x will be updated (minor update).
+#          ✅ From 2022.12.x to 2023.1.x will be updated (major update).
+
       default: "all"
       selector:
         select:
@@ -74,10 +89,10 @@ blueprint:
               value: "all"
             - label: Patches only
               value: "patches"
-            - label: Major & minor updates only
-              value: "major_and_minor"
             - label: Don't update
               value: "ignore"
+#            - label: Major & minor updates only
+#              value: "major_and_minor"
 
     update_exclusions:
       name: (optional) Exclusions
@@ -142,12 +157,14 @@ max_exceeded: warning
 trigger_variables:
   input_schedule_monthday: !input schedule_monthday
   input_core_os_update_mode: !input core_os_update_mode
+  #input_other_update_mode: !input other_update_mode
   input_pause_entities: !input pause_entities
 
   temp_input_update_exclusions: !input update_exclusions
   input_update_exclusions: "{{ temp_input_update_exclusions }}"
 
-  updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
+  updates_list: "{{states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list}}"
+
 
 trigger:
   - id: HA Schedule based
@@ -207,6 +224,12 @@ variables:
   os_installed_version: "{{ states.update | default([]) | selectattr('entity_id', 'in', os_update_entity) | map(attribute='attributes.installed_version') | list | first | default('') }}"
   os_latest_version: "{{ states.update | default([]) | selectattr('entity_id', 'in', os_update_entity) | map(attribute='attributes.latest_version') | list | first | default('') }}"
   os_version_change: "{{ version(os_latest_version) - version(os_installed_version) }}"
+
+  supervisor_update_entity: >-
+    {% for u in integration_entities('hassio') | select('search', '^update[.]')
+            if (device_attr(u, 'identifiers') | first)[1] == 'supervisor' %}
+        {{ u }}
+    {% endfor %}
 
   temp_input_update_exclusions: !input update_exclusions
   input_update_exclusions: >-
