@@ -30,6 +30,14 @@ blueprint:
       default: true
       selector:
         boolean:
+    backup_timeout:
+      name: Specify how much time the automation waits for the backup process. We cant check wether the backup was successful. Per Default we wait 1 hour to finish the backup.
+      default: 3600
+      selector:
+        number:
+          mode: box
+          min: 10
+          max: 3600
 
     restart_bool:
       name: Force Home Assistant host to restart if required by any update?
@@ -202,6 +210,7 @@ condition:
 
 variables:
   input_backup_bool: !input backup_bool
+  input_backup_timeout: !input backup_timeout
   input_restart_bool: !input restart_bool
 
   input_schedule_monthday: !input schedule_monthday
@@ -356,7 +365,7 @@ action:
           entity_id: '{{ this.entity_id }}'
           message: Backup triggered.
       - alias: "Give 1h for the backup" # There's no sensor for when the backup finishes
-        delay: 3600
+        delay: "{{ input_backup_timeout }}"
     else: []
 
   ########## Update add-ons (Standard) ##########
