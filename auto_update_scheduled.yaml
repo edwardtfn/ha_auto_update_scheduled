@@ -31,13 +31,20 @@ blueprint:
       selector:
         boolean:
     backup_timeout:
-      name: Specify how much time the automation waits for the backup process. We cant check wether the backup was successful. Per Default we wait 1 hour to finish the backup.
+      name: Backup Timeout
+      description: Specify how much time the automation waits for the backup process. We cant check wether the backup was successful. Per Default we wait 1 hour to finish the backup.
       default: 3600
       selector:
         number:
           mode: box
           min: 10
           max: 3600
+    
+    backup_location:
+      name: Backup Location
+      description: Specify where to store the backup for this autoupdate process.
+      selector:
+        backup_location:
 
     restart_bool:
       name: Force Home Assistant host to restart if required by any update?
@@ -102,7 +109,36 @@ blueprint:
               value: "ignore"
 #            - label: Major & minor updates only
 #              value: "major_and_minor"
+    
+    update_inclusion_mode:
+      name: Entity Inclusion Mode
+      description: >-
+        Please select the entity inclusion mode.
 
+        * All: Just build the update entity list from all available update.* entities, which are in state 'on'.
+        * Specified: Just build the update entity list from the specified entity list. Will also filter on the entities in 'on' state.
+        * Specified-Single: Same as specified, but will only update the first entity from the list.
+      selector:
+        select:
+          multiple: false
+          options:
+            - label: All
+              value: "all"
+            - label: Specified
+              value: "specified"
+            - label: Specified-Single
+              value: "specified-single"
+    
+    update_inclusion_entity_list:
+      name: Entity Inclusion List
+      description: >-
+        Select the items which should be updated.
+        => Important: This entity list will only be used when the Update Inclusion mode is set to "Specified" or "Specified-Single"
+      selector:
+        entity:
+          multiple: true
+          domain: update
+    
     update_exclusions:
       name: (optional) Exclusions
       description: 'Select the items that should NOT be included on the automated updates.
@@ -172,8 +208,14 @@ trigger_variables:
   temp_input_update_exclusions: !input update_exclusions
   input_update_exclusions: "{{ temp_input_update_exclusions }}"
 
-  updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
-
+  updates_list: |
+    {% if update_inclusion_mode == "all" %}
+      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+    {% elseif update_inclusion_mode == "specified" %}
+      {{ update_inclusion_mode | list }}
+    {% elseif update_inclusion_mode == "specified" %}
+      {{ update_inclusion_mode | list | first }}
+    {% endif %}
 
 trigger:
   - id: HA Schedule based
@@ -215,6 +257,7 @@ variables:
 
   input_schedule_monthday: !input schedule_monthday
   input_core_os_update_mode: !input core_os_update_mode
+  input_
   input_pause_entities: !input pause_entities
 
   core_update_entity: >-
@@ -364,8 +407,8 @@ action:
           name: Auto-update
           entity_id: '{{ this.entity_id }}'
           message: Backup triggered.
-      - alias: "Give 1h for the backup" # There's no sensor for when the backup finishes
-        delay: "{{ input_backup_timeout }}"
+      - alias: "Give {{ input_backup_timeout|default(3600) }} minutes for the backup" # There's no sensor for when the backup finishes
+        delay: "{{ input_backup_timeout|default(3600) }}"
     else: []
 
   ########## Update add-ons (Standard) ##########
