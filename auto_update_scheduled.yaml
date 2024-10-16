@@ -1067,15 +1067,22 @@ action:
     data:
       name: Auto-update
       entity_id: '{{ this.entity_id }}'
-      message:  >-
+      message:  |
         Remaining updates:
-        - {{ states.update 
+        {{ '- ' + states.update 
           | selectattr('state','eq','on')
           | selectattr('entity_id', 'in', updates_list)
           | rejectattr('entity_id', 'in', input_update_exclusions)
           | map(attribute='name') | list | join(' 
-
-        - ') }}
+        
+        - ') if 
+          states.update 
+          | selectattr('state','eq','on')
+          | selectattr('entity_id', 'in', updates_list)
+          | rejectattr('entity_id', 'in', input_update_exclusions)
+          | map(attribute='name') | list | count | int(0) > 0
+          else 'None remaining'
+         }}
   - alias: If Telegram notifications are enabled send telegram message to specified target.
     if:
       - condition: template
@@ -1085,13 +1092,20 @@ action:
       - data:
           message: |
             Remaining updates:
-            - {{ states.update 
+            {{ '- ' + states.update 
               | selectattr('state','eq','on')
               | selectattr('entity_id', 'in', updates_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | map(attribute='name') | list | join(' 
             
-            - ') }}
+            - ') if 
+              states.update 
+              | selectattr('state','eq','on')
+              | selectattr('entity_id', 'in', updates_list)
+              | rejectattr('entity_id', 'in', input_update_exclusions)
+              | map(attribute='name') | list | count | int(0) > 0
+              else 'None remaining'
+             }}
           target: "{{ input_notification_telegram_target_id }}"
           disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
         alias: Telegram Houseofnerds Message to group chat
@@ -1101,8 +1115,25 @@ action:
   - alias: "Restart"
     continue_on_error: true
     if:
-      - "{{ input_restart_bool and ( (states.update | selectattr('attributes.release_summary', 'defined') | selectattr('attributes.release_summary', 'search', '<ha-alert alert-type=''error''>') | map(attribute='entity_id') | list | count | int(0)) > 0) }}"
+      # this has to be tied together with an or function, because if the HA admin wants a restart at the end, but no update entity has an alert type error, the HA admin wont get the requested restart.
+      #
+      - "{{ input_restart_bool or ( (states.update | selectattr('attributes.release_summary', 'defined') | selectattr('attributes.release_summary', 'search', '<ha-alert alert-type=''error''>') | map(attribute='entity_id') | list | count | int(0)) > 0) }}"
     then:
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "Restart was asked by admin. Restarting Homeassistant..."
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
+      - alias: "Wait 15 seconds to deliver the telegram message."
+        delay: 
+          seconds: 15
       - alias: "Restart - Logbook - Restarting"
         continue_on_error: true
         service: logbook.log
