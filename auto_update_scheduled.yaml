@@ -137,6 +137,7 @@ blueprint:
         => Important: This entity list will only be used when the Update Inclusion mode is set to "Specified" or "Specified-Single".
 
         Select the items which should be updated.
+      default: [ ]
       selector:
         entity:
           multiple: true
@@ -149,6 +150,7 @@ blueprint:
 
         This defines the Searchfilter for finding the right update entities.
         This enables wildcard-like searching for a group of entities, aka "all zigbee entities" or "everything from Sonoff" etc.
+      default: ""
       selector:
         text:
           multiline: false
@@ -221,6 +223,7 @@ blueprint:
       description: 'This specifies the Telegram Target (Chat or group ID) aka the target to send the message to.
 
       Example: -1002089908051'
+      default: ""
       selector:
         text:
     
