@@ -500,7 +500,7 @@ action:
       - condition: template
         value_template: "{{ input_backup_bool }}"
       - condition: state
-        entity_id: "{{ input_update_process_started_entity }}"
+        entity_id: !input update_process_started_entity
         state: "off"
 #          {{ ( input_backup_bool ) and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.backup_state', 'last_backup'))) > 7200) }}
     then:
