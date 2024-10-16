@@ -258,11 +258,11 @@ trigger_variables:
   updates_list: |
     {% if input_update_inclusion_mode == "all" %}
       {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-    {% elseif input_update_inclusion_mode == "specified" %}
+    {% elif input_update_inclusion_mode == "specified" %}
       {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-    {% elseif input_update_inclusion_mode == "specified" %}
+    {% elif input_update_inclusion_mode == "specified" %}
       {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
-    {% elseif input_update_inclusion_mode == "searchstring" %}
+    {% elif input_update_inclusion_mode == "searchstring" %}
       '['
       {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
         {% if searchfilter in item %}
@@ -370,11 +370,11 @@ variables:
   updates_list: |
     {% if input_update_inclusion_mode == "all" %}
       {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-    {% elseif input_update_inclusion_mode == "specified" %}
+    {% elif input_update_inclusion_mode == "specified" %}
       {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-    {% elseif input_update_inclusion_mode == "specified" %}
+    {% elif input_update_inclusion_mode == "specified" %}
       {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
-    {% elseif input_update_inclusion_mode == "searchstring" %}
+    {% elif input_update_inclusion_mode == "searchstring" %}
       '['
       {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
         {% if searchfilter in item %}
@@ -597,11 +597,11 @@ action:
       updates_list: |
         {% if input_update_inclusion_mode == "all" %}
           {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-        {% elseif input_update_inclusion_mode == "specified" %}
+        {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-        {% elseif input_update_inclusion_mode == "specified" %}
+        {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
-        {% elseif input_update_inclusion_mode == "searchstring" %}
+        {% elif input_update_inclusion_mode == "searchstring" %}
           '['
           {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
             {% if searchfilter in item %}
@@ -731,11 +731,11 @@ action:
       updates_list: |
         {% if input_update_inclusion_mode == "all" %}
           {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-        {% elseif input_update_inclusion_mode == "specified" %}
+        {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-        {% elseif input_update_inclusion_mode == "specified" %}
+        {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
-        {% elseif input_update_inclusion_mode == "searchstring" %}
+        {% elif input_update_inclusion_mode == "searchstring" %}
           '['
           {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
             {% if searchfilter in item %}
@@ -878,11 +878,11 @@ action:
       updates_list: |
         {% if input_update_inclusion_mode == "all" %}
           {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-        {% elseif input_update_inclusion_mode == "specified" %}
+        {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-        {% elseif input_update_inclusion_mode == "specified" %}
+        {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
-        {% elseif input_update_inclusion_mode == "searchstring" %}
+        {% elif input_update_inclusion_mode == "searchstring" %}
           '['
           {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
             {% if searchfilter in item %}
