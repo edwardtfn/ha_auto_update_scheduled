@@ -128,16 +128,31 @@ blueprint:
               value: "specified"
             - label: Specified-Single
               value: "specified-single"
+            - label: Searchfilter
+              value: "searchfilter"
     
     update_inclusion_entity_list:
       name: Entity Inclusion List
       description: >-
+        => Important: This entity list will only be used when the Update Inclusion mode is set to "Specified" or "Specified-Single".
+
         Select the items which should be updated.
-        => Important: This entity list will only be used when the Update Inclusion mode is set to "Specified" or "Specified-Single"
       selector:
         entity:
           multiple: true
           domain: update
+    
+    update_inclusion_entity_searchfilter:
+      name: Entity Inclusion Searchfilter
+      description: >-
+        => Important: This searchfilter will only be used when the Update Inclusion mode is set to "Searchstring".
+
+        This defines the Searchfilter for finding the right update entities.
+        This enables wildcard-like searching for a group of entities, aka "all zigbee entities" or "everything from Sonoff" etc.
+      selector:
+        text:
+          multiline: false
+
     
     update_exclusions:
       name: (optional) Exclusions
@@ -194,6 +209,27 @@ blueprint:
             - input_boolean
             - binary_sensor
             - switch
+    
+    notification_telegram_enable:
+      name: Enable telegram notifications
+      default: false
+      selector:
+        boolean:
+    
+    notification_telegram_target_id:
+      name: Number of Telegram Target (Chat or Group ID)
+      description: 'This specifies the Telegram Target (Chat or group ID) aka the target to send the message to.
+
+      Example: -1002089908051'
+      selector:
+        text:
+    
+    notification_telegram_disable_notification:
+      name: Disable the Telegram notification from the Telegram client.
+      description: This switches to a 'silent' message without a notification on other devices with a running telegram client.
+      default: false
+      selector:
+        boolean:
 
 
 mode: single
@@ -208,13 +244,29 @@ trigger_variables:
   temp_input_update_exclusions: !input update_exclusions
   input_update_exclusions: "{{ temp_input_update_exclusions }}"
 
+  input_update_inclusion_mode: !input update_inclusion_mode
+  input_update_inclusion_entity_list: !input update_inclusion_entity_list
+  input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
+  input_notification_telegram_enable: !input notification_telegram_enable
+  input_notification_telegram_target_id: !input notification_telegram_target_id
+  input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
+
+
   updates_list: |
-    {% if update_inclusion_mode == "all" %}
+    {% if input_update_inclusion_mode == "all" %}
       {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-    {% elseif update_inclusion_mode == "specified" %}
-      {{ update_inclusion_mode | list }}
-    {% elseif update_inclusion_mode == "specified" %}
-      {{ update_inclusion_mode | list | first }}
+    {% elseif input_update_inclusion_mode == "specified" %}
+      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+    {% elseif input_update_inclusion_mode == "specified" %}
+      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+    {% elseif input_update_inclusion_mode == "searchstring" %}
+      '['
+      {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
+        {% if searchfilter in item %}
+        "{{ item }}",
+        {% endif %}
+      {% endfor %}
+      ']'
     {% endif %}
 
 trigger:
@@ -257,8 +309,13 @@ variables:
 
   input_schedule_monthday: !input schedule_monthday
   input_core_os_update_mode: !input core_os_update_mode
-  input_
   input_pause_entities: !input pause_entities
+  input_update_inclusion_mode: !input update_inclusion_mode
+  input_update_inclusion_entity_list: !input update_inclusion_entity_list
+  input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
+  input_notification_telegram_enable: !input notification_telegram_enable
+  input_notification_telegram_target_id: !input notification_telegram_target_id
+  input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
 
   core_update_entity: >-
     {% for u in integration_entities('hassio') | select('search', '^update[.]')
@@ -307,7 +364,24 @@ variables:
     {% endif %}
     {{ exclusions }}
 
-  updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
+  updates_list: |
+    {% if input_update_inclusion_mode == "all" %}
+      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+    {% elseif input_update_inclusion_mode == "specified" %}
+      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+    {% elseif input_update_inclusion_mode == "specified" %}
+      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+    {% elseif input_update_inclusion_mode == "searchstring" %}
+      '['
+      {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
+        {% if searchfilter in item %}
+        "{{ item }}",
+        {% endif %}
+      {% endfor %}
+      ']'
+    {% endif %}
+  
+  #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
 
 action:
@@ -360,6 +434,27 @@ action:
           | map(attribute='name') | list | join(' 
 
         - ') }}
+  - alias: If Telegram notifications are enabled send telegram message to specified target.
+    if:
+      - condition: template
+        value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+        alias: Check if telegram notifications are enabled
+    then:
+      - data:
+          message: >-
+            List of updates:
+            - {{ states.update 
+              | selectattr('state','eq','on') 
+              | selectattr('entity_id', 'in', updates_list)
+              | rejectattr('entity_id', 'in', input_update_exclusions)
+              | map(attribute='name') | list | join(' 
+
+            - ') }}
+          title: "Homeassistant Auto-Updater"
+          target: "{{ input_notification_telegram_target_id }}"
+          disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+        alias: Telegram Houseofnerds Message to group chat
+        action: telegram_bot.send_message
 
   - alias: "Logbook: Running pre-update actions"
     continue_on_error: true
@@ -391,6 +486,19 @@ action:
           name: Auto-update
           entity_id: '{{ this.entity_id }}'
           message: Backing up Home Assistant.
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "Triggering Backup."
+              title: "Homeassistant Auto-Updater"
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
       - alias: "Call backup service"
         continue_on_error: true
         service: hassio.backup_full
@@ -407,8 +515,35 @@ action:
           name: Auto-update
           entity_id: '{{ this.entity_id }}'
           message: Backup triggered.
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "Backup is triggered - Waiting defined time."
+              title: "Homeassistant Auto-Updater"
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
       - alias: "Give {{ input_backup_timeout|default(3600) }} minutes for the backup" # There's no sensor for when the backup finishes
-        delay: "{{ input_backup_timeout|default(3600) }}"
+        delay: 
+          minutes: "{{ input_backup_timeout|default(3600) }}"
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "Backup Waittime finished. Continuing..."
+              title: "Homeassistant Auto-Updater"
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
     else: []
 
   ########## Update add-ons (Standard) ##########
@@ -456,7 +591,23 @@ action:
         {% endif %}
         {{ exclusions }}
 
-      updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
+      updates_list: |
+        {% if input_update_inclusion_mode == "all" %}
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+        {% elseif input_update_inclusion_mode == "specified" %}
+          {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+        {% elseif input_update_inclusion_mode == "specified" %}
+          {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+        {% elseif input_update_inclusion_mode == "searchstring" %}
+          '['
+          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
+            {% if searchfilter in item %}
+            "{{ item }}",
+            {% endif %}
+          {% endfor %}
+          ']'
+        {% endif %}
+      #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
   - alias: "Update - Standard"
     continue_on_error: true
@@ -504,6 +655,19 @@ action:
             name: Auto-update
             entity_id: '{{ this.entity_id }}'
             message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+        - alias: If Telegram notifications are enabled send telegram message to specified target.
+          if:
+            - condition: template
+              value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+              alias: Check if telegram notifications are enabled
+          then:
+            - data:
+                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+                title: "Homeassistant Auto-Updater"
+                target: "{{ input_notification_telegram_target_id }}"
+                disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              alias: Telegram Houseofnerds Message to group chat
+              action: telegram_bot.send_message
         - alias: "Update - Standard - Install"
           continue_on_error: true
           service: update.install
@@ -561,7 +725,23 @@ action:
         {% endif %}
         {{ exclusions }}
 
-      updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
+      updates_list: |
+        {% if input_update_inclusion_mode == "all" %}
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+        {% elseif input_update_inclusion_mode == "specified" %}
+          {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+        {% elseif input_update_inclusion_mode == "specified" %}
+          {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+        {% elseif input_update_inclusion_mode == "searchstring" %}
+          '['
+          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
+            {% if searchfilter in item %}
+            "{{ item }}",
+            {% endif %}
+          {% endfor %}
+          ']'
+        {% endif %}
+      #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
   - alias: "Update - Core"
     continue_on_error: true
@@ -591,6 +771,19 @@ action:
             name: Auto-update
             entity_id: '{{ this.entity_id }}'
             message: "Starting sequence of core items updates..."
+        - alias: If Telegram notifications are enabled send telegram message to specified target.
+          if:
+            - condition: template
+              value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+              alias: Check if telegram notifications are enabled
+          then:
+            - data:
+                message: "Starting sequence of core items updates..."
+                title: "Homeassistant Auto-Updater"
+                target: "{{ input_notification_telegram_target_id }}"
+                disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              alias: Telegram Houseofnerds Message to group chat
+              action: telegram_bot.send_message
         - variables:
             pending_update_list: >-
               {{ states.update 
@@ -609,6 +802,19 @@ action:
             name: Auto-update
             entity_id: '{{ this.entity_id }}'
             message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+        - alias: If Telegram notifications are enabled send telegram message to specified target.
+          if:
+            - condition: template
+              value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+              alias: Check if telegram notifications are enabled
+          then:
+            - data:
+                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+                title: "Homeassistant Auto-Updater"
+                target: "{{ input_notification_telegram_target_id }}"
+                disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              alias: Telegram Houseofnerds Message to group chat
+              action: telegram_bot.send_message
         - alias: "Update - Core - Install"
           continue_on_error: true
           service: update.install
@@ -666,7 +872,23 @@ action:
         {% endif %}
         {{ exclusions }}
 
-      updates_list: "{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
+      updates_list: |
+        {% if input_update_inclusion_mode == "all" %}
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+        {% elseif input_update_inclusion_mode == "specified" %}
+          {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+        {% elseif input_update_inclusion_mode == "specified" %}
+          {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+        {% elseif input_update_inclusion_mode == "searchstring" %}
+          '['
+          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
+            {% if searchfilter in item %}
+            "{{ item }}",
+            {% endif %}
+          {% endfor %}
+          ']'
+        {% endif %}
+      #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
   - alias: "Update - OS"
     continue_on_error: true
@@ -696,6 +918,19 @@ action:
             name: Auto-update
             entity_id: '{{ this.entity_id }}'
             message: "Starting sequence of OS update..."
+        - alias: If Telegram notifications are enabled send telegram message to specified target.
+          if:
+            - condition: template
+              value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+              alias: Check if telegram notifications are enabled
+          then:
+            - data:
+                message: "Starting sequence of OS updates..."
+                title: "Homeassistant Auto-Updater"
+                target: "{{ input_notification_telegram_target_id }}"
+                disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              alias: Telegram Houseofnerds Message to group chat
+              action: telegram_bot.send_message
         - variables:
             pending_update_list: >-
               {{ states.update 
@@ -714,6 +949,19 @@ action:
             name: Auto-update
             entity_id: '{{ this.entity_id }}'
             message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+        - alias: If Telegram notifications are enabled send telegram message to specified target.
+          if:
+            - condition: template
+              value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+              alias: Check if telegram notifications are enabled
+          then:
+            - data:
+                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+                title: "Homeassistant Auto-Updater"
+                target: "{{ input_notification_telegram_target_id }}"
+                disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              alias: Telegram Houseofnerds Message to group chat
+              action: telegram_bot.send_message
         - alias: "Update - OS - Install"
           continue_on_error: true
           service: update.install
@@ -741,19 +989,26 @@ action:
           name: Auto-update
           entity_id: '{{ this.entity_id }}'
           message: Updating all remaining items (if any).
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "Updating all remaining items (if any)."
+              title: "Homeassistant Auto-Updater"
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
       - alias: "Update - Remaining - Install"
         continue_on_error: true
         service: update.install
         data: {}
         target:
           entity_id: >-
-            {{ states.update 
-            | selectattr('state','eq','on') 
-            | selectattr('entity_id', 'in', updates_list)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | map(attribute='entity_id') 
-            | list 
-            }}
+            {{ states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
       - alias: "Update - Remaining - Wait"
         continue_on_error: true
         wait_template: >-
@@ -769,6 +1024,19 @@ action:
       name: Auto-update
       entity_id: '{{ this.entity_id }}'
       message: Finishing update process.
+  - alias: If Telegram notifications are enabled send telegram message to specified target.
+    if:
+      - condition: template
+        value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+        alias: Check if telegram notifications are enabled
+    then:
+      - data:
+          message: "Finishing update process."
+          title: "Homeassistant Auto-Updater"
+          target: "{{ input_notification_telegram_target_id }}"
+          disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+        alias: Telegram Houseofnerds Message to group chat
+        action: telegram_bot.send_message
   - alias: "Logbook - Remaining updates"
     continue_on_error: true
     service: logbook.log
@@ -784,6 +1052,27 @@ action:
           | map(attribute='name') | list | join(' 
 
         - ') }}
+  - alias: If Telegram notifications are enabled send telegram message to specified target.
+    if:
+      - condition: template
+        value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+        alias: Check if telegram notifications are enabled
+    then:
+      - data:
+          message: >-
+            Remaining updates:
+            - {{ states.update 
+              | selectattr('state','eq','on')
+              | selectattr('entity_id', 'in', updates_list)
+              | rejectattr('entity_id', 'in', input_update_exclusions)
+              | map(attribute='name') | list | join(' 
+            
+            - ') }}
+          title: "Homeassistant Auto-Updater"
+          target: "{{ input_notification_telegram_target_id }}"
+          disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+        alias: Telegram Houseofnerds Message to group chat
+        action: telegram_bot.send_message
 
   ########## Restart Home Assistant ##########
   - alias: "Restart"
