@@ -42,7 +42,10 @@ blueprint:
     
     backup_location:
       name: Backup Location
-      description: Specify where to store the backup for this autoupdate process.
+      description: 'Specify where to store the backup for this autoupdate process.
+        
+        You can create a new backup location under [Settings > System > Storage](https://my.home-assistant.io/redirect/storage/).'
+      default: "/backup"
       selector:
         backup_location:
 
@@ -52,10 +55,22 @@ blueprint:
       default: false
       selector:
         boolean:
+    
+    update_process_started_entity:
+      name: Specify the switch entity which will be used to determine if the overall update process was started.
+      description: 'This entity will be used to determine if we still have to do a backup on automation start - so it is for inner workings of this automation.
+
+        This saves you from getting multiple backups in the same update window.
+        You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
+        '
+      selector:
+        entity:
+          multiple: false
+          domain: input_boolean
 
     schedule_entity:
       name: Schedule entity
-      description: 'You can create an [Schedule](https://www.home-assistant.io/integrations/schedule) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
+      description: 'You can create a [Schedule](https://www.home-assistant.io/integrations/schedule) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
 
 
         Note => The schedule windows will define when an update will start. It is possible that a backup, an update or a restart process finishes after the schedule window, but new updates won''t stars outside the schedule windows.'
@@ -289,9 +304,10 @@ trigger:
       {{ (now().day >= ((input_schedule_monthday) | int(0))) }}
 
 condition:
-  - condition: template
-    value_template: >-
-      {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) > 0 }}
+  # this cant be a condition for the whole automation because we have to "run" the automation to disable the input_boolean helper at the end of one complete update process
+  #- condition: template
+  #  value_template: >-
+  #    {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) > 0 }}
   - condition: template
     value_template: >-
       {{ (now().day >= ((input_schedule_monthday) | int(0))) }}
@@ -309,7 +325,7 @@ variables:
   input_backup_bool: !input backup_bool
   input_backup_timeout: !input backup_timeout
   input_restart_bool: !input restart_bool
-
+  input_update_process_started_entity: !input update_process_started_entity
   input_schedule_monthday: !input schedule_monthday
   input_core_os_update_mode: !input core_os_update_mode
   input_pause_entities: !input pause_entities
@@ -394,6 +410,9 @@ action:
     if:
       - "{{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) < 1 }}"
     then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: "{{ input_update_process_started_entity }}"
       - stop: Nothing to update
     else: []
 
@@ -444,16 +463,15 @@ action:
         alias: Check if telegram notifications are enabled
     then:
       - data:
-          message: >-
+          message: |
             List of updates:
+
             - {{ states.update 
               | selectattr('state','eq','on') 
               | selectattr('entity_id', 'in', updates_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | map(attribute='name') | list | join(' 
-
             - ') }}
-          title: "Homeassistant Auto-Updater"
           target: "{{ input_notification_telegram_target_id }}"
           disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
         alias: Telegram Houseofnerds Message to group chat
@@ -479,9 +497,16 @@ action:
   - alias: "Backup"
     continue_on_error: true
     if:
-      - "{{ input_backup_bool }}"
+      - condition: template
+        value_template: "{{ input_backup_bool }}"
+      - condition: state
+        entity_id: "{{ input_update_process_started_entity }}"
+        state: "off"
 #          {{ ( input_backup_bool ) and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.backup_state', 'last_backup'))) > 7200) }}
     then:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: "{{ input_update_process_started_entity }}"
       - alias: "Logbook - Backing up"
         continue_on_error: true
         service: logbook.log
@@ -496,8 +521,7 @@ action:
             alias: Check if telegram notifications are enabled
         then:
           - data:
-              message: "Triggering Backup."
-              title: "Homeassistant Auto-Updater"
+              message: "Triggering Backup..."
               target: "{{ input_notification_telegram_target_id }}"
               disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
             alias: Telegram Houseofnerds Message to group chat
@@ -525,8 +549,7 @@ action:
             alias: Check if telegram notifications are enabled
         then:
           - data:
-              message: "Backup is triggered - Waiting defined time."
-              title: "Homeassistant Auto-Updater"
+              message: "Backup is triggered - Waiting defined time: {{ input_backup_timeout|default(3600) }} minutes"
               target: "{{ input_notification_telegram_target_id }}"
               disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
             alias: Telegram Houseofnerds Message to group chat
@@ -542,7 +565,6 @@ action:
         then:
           - data:
               message: "Backup Waittime finished. Continuing..."
-              title: "Homeassistant Auto-Updater"
               target: "{{ input_notification_telegram_target_id }}"
               disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
             alias: Telegram Houseofnerds Message to group chat
@@ -665,8 +687,9 @@ action:
               alias: Check if telegram notifications are enabled
           then:
             - data:
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-                title: "Homeassistant Auto-Updater"
+                message: |
+                  Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
+                  - ')  }} ...
                 target: "{{ input_notification_telegram_target_id }}"
                 disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
               alias: Telegram Houseofnerds Message to group chat
@@ -782,7 +805,6 @@ action:
           then:
             - data:
                 message: "Starting sequence of core items updates..."
-                title: "Homeassistant Auto-Updater"
                 target: "{{ input_notification_telegram_target_id }}"
                 disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
               alias: Telegram Houseofnerds Message to group chat
@@ -812,8 +834,9 @@ action:
               alias: Check if telegram notifications are enabled
           then:
             - data:
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-                title: "Homeassistant Auto-Updater"
+                message: |
+                  Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
+                  - ')  }} ...
                 target: "{{ input_notification_telegram_target_id }}"
                 disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
               alias: Telegram Houseofnerds Message to group chat
@@ -929,7 +952,6 @@ action:
           then:
             - data:
                 message: "Starting sequence of OS updates..."
-                title: "Homeassistant Auto-Updater"
                 target: "{{ input_notification_telegram_target_id }}"
                 disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
               alias: Telegram Houseofnerds Message to group chat
@@ -959,8 +981,9 @@ action:
               alias: Check if telegram notifications are enabled
           then:
             - data:
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-                title: "Homeassistant Auto-Updater"
+                message: |
+                  Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
+                  - ')  }} ...
                 target: "{{ input_notification_telegram_target_id }}"
                 disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
               alias: Telegram Houseofnerds Message to group chat
@@ -1000,7 +1023,6 @@ action:
         then:
           - data:
               message: "Updating all remaining items (if any)."
-              title: "Homeassistant Auto-Updater"
               target: "{{ input_notification_telegram_target_id }}"
               disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
             alias: Telegram Houseofnerds Message to group chat
@@ -1035,7 +1057,6 @@ action:
     then:
       - data:
           message: "Finishing update process."
-          title: "Homeassistant Auto-Updater"
           target: "{{ input_notification_telegram_target_id }}"
           disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
         alias: Telegram Houseofnerds Message to group chat
@@ -1062,7 +1083,7 @@ action:
         alias: Check if telegram notifications are enabled
     then:
       - data:
-          message: >-
+          message: |
             Remaining updates:
             - {{ states.update 
               | selectattr('state','eq','on')
@@ -1071,7 +1092,6 @@ action:
               | map(attribute='name') | list | join(' 
             
             - ') }}
-          title: "Homeassistant Auto-Updater"
           target: "{{ input_notification_telegram_target_id }}"
           disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
         alias: Telegram Houseofnerds Message to group chat
