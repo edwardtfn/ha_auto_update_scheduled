@@ -80,12 +80,24 @@ blueprint:
           multiple: false
           domain: schedule
 
-    schedule_monthday:
+    schedule_monthday_earliest:
       name: Earliest day in the month to update Home Assistant
       description: 'Usually a new major version of Home Assistant is available on the begining of every month. Some people consider those releases as not stable enough and prefer to avoid those versions, not updating the system until the mid of the month (day 15).
 
 
         Note => If you select a day higher than 28 the updates won''t run every month.'
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 31
+          step: 1
+          mode: slider
+    schedule_monthday_last:
+      name: Latest day in the month to update Home Assistant
+      description: 'Specify the latest day in month, on which this update can run.
+      
+        Note => If you select a day lower than the Earliest Day in month then the update will never run.'
       default: 1
       selector:
         number:
@@ -256,7 +268,8 @@ mode: single
 max_exceeded: warning
 
 trigger_variables:
-  input_schedule_monthday: !input schedule_monthday
+  input_schedule_monthday_earliest: !input schedule_monthday_earliest
+  input_schedule_monthday_last: !input schedule_monthday_last
   input_core_os_update_mode: !input core_os_update_mode
   #input_other_update_mode: !input other_update_mode
   input_pause_entities: !input pause_entities
@@ -315,7 +328,7 @@ trigger:
   - id: New day
     platform: template
     value_template: >-
-      {{ (now().day >= ((input_schedule_monthday) | int(0))) }}
+      {{ ( (now().day >= ((input_schedule_monthday_earliest) | int(0))) and (now().day <= ((input_schedule_monthday_last) | int(0))) ) }}
 
 condition:
   # this cant be a condition for the whole automation because we have to "run" the automation to disable the input_boolean helper at the end of one complete update process
@@ -324,7 +337,7 @@ condition:
   #    {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) > 0 }}
   - condition: template
     value_template: >-
-      {{ (now().day >= ((input_schedule_monthday) | int(0))) }}
+      {{ ( (now().day >= ((input_schedule_monthday_earliest) | int(0))) and (now().day <= ((input_schedule_monthday_last) | int(0))) ) }}
   - condition: state
     entity_id: !input schedule_entity
     state: "on"
@@ -340,7 +353,7 @@ variables:
   input_backup_timeout: !input backup_timeout
   input_restart_bool: !input restart_bool
   input_update_process_started_entity: !input update_process_started_entity
-  input_schedule_monthday: !input schedule_monthday
+  input_schedule_monthday_earliest: !input schedule_monthday_earliest
   input_core_os_update_mode: !input core_os_update_mode
   input_pause_entities: !input pause_entities
   input_update_inclusion_mode: !input update_inclusion_mode
@@ -454,7 +467,7 @@ action:
         Variables: 
           input_backup_bool: {{ input_backup_bool }}, 
           input_restart_bool: {{ input_restart_bool }}, 
-          input_schedule_monthday: {{ input_schedule_monthday }}, 
+          input_schedule_monthday_earliest: {{ input_schedule_monthday_earliest }}, 
           input_update_exclusions: {{ temp_input_update_exclusions }},
           input_core_os_update_mode: {{ input_core_os_update_mode }},
           updates_list: {{ updates_list }}
