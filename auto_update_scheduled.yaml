@@ -284,17 +284,6 @@ trigger_variables:
   input_notification_telegram_target_id: !input notification_telegram_target_id
   input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
 
-  temp_updates_list: |
-    {% if input_update_inclusion_mode == "searchfilter-single" %}
-      '['
-      {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list  ) %}
-        {% if searchfilter in item %}
-        "{{ item }}",
-        {% endif %}
-      {% endfor %}
-      ']'
-    {% endif %}
-
   updates_list: |
     {% if input_update_inclusion_mode == "all" %}
       {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
@@ -303,15 +292,9 @@ trigger_variables:
     {% elif input_update_inclusion_mode == "specified" %}
       {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
     {% elif input_update_inclusion_mode == "searchstring" %}
-      '['
-      {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
-        {% if searchfilter in item %}
-        "{{ item }}",
-        {% endif %}
-      {% endfor %}
-      ']'
+      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
     {% elif input_update_inclusion_mode == "searchfilter-single" %}
-      {{ temp_updates_list | first }}
+      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
     {% endif %}
 
 trigger:
@@ -410,17 +393,6 @@ variables:
     {% endif %}
     {{ exclusions }}
 
-  temp_updates_list: |
-    {% if input_update_inclusion_mode == "searchfilter-single" %}
-      '['
-      {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list  ) %}
-        {% if searchfilter in item %}
-        "{{ item }}",
-        {% endif %}
-      {% endfor %}
-      ']'
-    {% endif %}
-
   updates_list: |
     {% if input_update_inclusion_mode == "all" %}
       {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
@@ -429,15 +401,9 @@ variables:
     {% elif input_update_inclusion_mode == "specified" %}
       {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
     {% elif input_update_inclusion_mode == "searchstring" %}
-      '['
-      {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
-        {% if searchfilter in item %}
-        "{{ item }}",
-        {% endif %}
-      {% endfor %}
-      ']'
+      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
     {% elif input_update_inclusion_mode == "searchfilter-single" %}
-      {{ temp_updates_list | first }}
+      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
     {% endif %}
   
   #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
@@ -656,17 +622,6 @@ action:
         {% endif %}
         {{ exclusions }}
 
-      temp_updates_list: |
-        {% if input_update_inclusion_mode == "searchfilter-single" %}
-          '['
-          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list  ) %}
-            {% if searchfilter in item %}
-            "{{ item }}",
-            {% endif %}
-          {% endfor %}
-          ']'
-        {% endif %}
-
       updates_list: |
         {% if input_update_inclusion_mode == "all" %}
           {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
@@ -675,15 +630,9 @@ action:
         {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
         {% elif input_update_inclusion_mode == "searchstring" %}
-          '['
-          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
-            {% if searchfilter in item %}
-            "{{ item }}",
-            {% endif %}
-          {% endfor %}
-          ']'
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
         {% elif input_update_inclusion_mode == "searchfilter-single" %}
-          {{ temp_updates_list | first }}
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
         {% endif %}
       #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
@@ -804,17 +753,6 @@ action:
         {% endif %}
         {{ exclusions }}
 
-      temp_updates_list: |
-        {% if input_update_inclusion_mode == "searchfilter-single" %}
-          '['
-          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list  ) %}
-            {% if searchfilter in item %}
-            "{{ item }}",
-            {% endif %}
-          {% endfor %}
-          ']'
-        {% endif %}
-
       updates_list: |
         {% if input_update_inclusion_mode == "all" %}
           {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
@@ -823,15 +761,9 @@ action:
         {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
         {% elif input_update_inclusion_mode == "searchstring" %}
-          '['
-          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
-            {% if searchfilter in item %}
-            "{{ item }}",
-            {% endif %}
-          {% endfor %}
-          ']'
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
         {% elif input_update_inclusion_mode == "searchfilter-single" %}
-          {{ temp_updates_list | first }}
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
         {% endif %}
       #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
@@ -964,17 +896,6 @@ action:
         {% endif %}
         {{ exclusions }}
 
-      temp_updates_list: |
-        {% if input_update_inclusion_mode == "searchfilter-single" %}
-          '['
-          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list  ) %}
-            {% if searchfilter in item %}
-            "{{ item }}",
-            {% endif %}
-          {% endfor %}
-          ']'
-        {% endif %}
-
       updates_list: |
         {% if input_update_inclusion_mode == "all" %}
           {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
@@ -983,15 +904,9 @@ action:
         {% elif input_update_inclusion_mode == "specified" %}
           {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
         {% elif input_update_inclusion_mode == "searchstring" %}
-          '['
-          {% for item in (states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | sort | list ) %}
-            {% if searchfilter in item %}
-            "{{ item }}",
-            {% endif %}
-          {% endfor %}
-          ']'
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
         {% elif input_update_inclusion_mode == "searchfilter-single" %}
-          {{ temp_updates_list | first }}
+          {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
         {% endif %}
       #"{{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}"
 
