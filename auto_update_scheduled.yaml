@@ -42,9 +42,10 @@ blueprint:
     
     backup_location:
       name: Backup Location
-      description: 'Specify where to store the backup for this autoupdate process.
-        
-        You can create a new backup location under [Settings > System > Storage](https://my.home-assistant.io/redirect/storage/).'
+      description: 'You can create a new backup location under [Settings > System > Storage](https://my.home-assistant.io/redirect/storage/).
+
+
+        Specify where to store the backup for this autoupdate process.'
       default: "/backup"
       selector:
         backup_location:
@@ -57,11 +58,12 @@ blueprint:
         boolean:
     
     update_process_started_entity:
-      name: Specify the switch entity which will be used to determine if the overall update process was started.
-      description: 'This entity will be used to determine if we still have to do a backup on automation start - so it is for inner workings of this automation.
+      name: '"Update Process Started" Toggle Entity'
+      description: 'You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
+
+        This entity will be used to determine if we still have to do a backup on automation start - so it is for inner workings of this automation.
         This saves you from getting multiple backups in the same update window.
-        You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
         '
       selector:
         entity:
@@ -81,7 +83,7 @@ blueprint:
           domain: schedule
 
     schedule_monthday_earliest:
-      name: Earliest day in the month to update Home Assistant
+      name: Earliest day in the month to run the update process
       description: 'Usually a new major version of Home Assistant is available on the begining of every month. Some people consider those releases as not stable enough and prefer to avoid those versions, not updating the system until the mid of the month (day 15).
 
 
@@ -94,9 +96,10 @@ blueprint:
           step: 1
           mode: slider
     schedule_monthday_last:
-      name: Latest day in the month to update Home Assistant
+      name: Latest day in the month to run the update process
       description: 'Specify the latest day in month, on which this update can run.
-      
+
+
         Note => If you select a day lower than the Earliest Day in month then the update will never run.'
       default: 1
       selector:
@@ -142,9 +145,23 @@ blueprint:
       description: >-
         Please select the entity inclusion mode.
 
-        * All: Just build the update entity list from all available update.* entities, which are in state 'on'.
-        * Specified: Just build the update entity list from the specified entity list. Will also filter on the entities in 'on' state.
-        * Specified-Single: Same as specified, but will only update the first entity from the list.
+        * All: 
+          Just build the update entity list from all available update.* entities, which are in state 'on'.
+
+        * Specified: 
+          Just build the update entity list from the specified entity list. Will also filter on the entities in 'on' state.
+
+        * Specified-Single: 
+          Same as specified, but will only update the first entity from the list.
+
+        * Searchfilter:
+          This works as a wildcard filter.
+          Examples:
+            'update.zigbee2mqtt_'   => all update entities from zigbee2mqtt addon
+            'update.esphome_'       => all update entities from esphome devices if their names start with 'esphome_'
+
+        * Searchfilter-Single:
+          Just like the searchfilter, but only the first entity. (Sorted alphabetically)
       selector:
         select:
           multiple: false
@@ -251,7 +268,7 @@ blueprint:
       name: Number of Telegram Target (Chat or Group ID)
       description: 'This specifies the Telegram Target (Chat or group ID) aka the target to send the message to.
 
-      Example: -1002089908051'
+      Example: -1111111111111'
       default: ""
       selector:
         text:
@@ -419,6 +436,18 @@ action:
       - action: input_boolean.turn_off
         target:
           entity_id: "{{ input_update_process_started_entity }}"
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "We seem to have installed all needed Updates. Disabling the 'Update Process Started' entity and stopping update process."
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
       - stop: Nothing to update
     else: []
 
