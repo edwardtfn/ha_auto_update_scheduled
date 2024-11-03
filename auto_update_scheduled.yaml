@@ -427,6 +427,27 @@ variables:
 
 
 action:
+  ######### Inform logbook and telegram which update automation is running #########
+  - alias: If Telegram notifications are enabled send telegram message to specified target.
+    if:
+      - condition: template
+        value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+        alias: Check if telegram notifications are enabled
+    then:
+      - data:
+          message: '{{ this.entity_id }} is starting now.'
+          target: "{{ input_notification_telegram_target_id }}"
+          disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+        alias: Telegram Houseofnerds Message to group chat
+        action: telegram_bot.send_message
+  - alias: "Logbook"
+    continue_on_error: true
+    service: logbook.log
+    data:
+      name: Inform which update automation is running
+      entity_id: '{{ this.entity_id }}'
+      message: '{{ this.entity_id }} is starting now.'
+  
   ########## Check for skipping core/OS ##########
   - alias: "Re-check conditions after restart"
     continue_on_error: true
