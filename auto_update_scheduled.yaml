@@ -428,10 +428,49 @@ variables:
 
 action:
   ########## Check for skipping core/OS ##########
-  - alias: "Re-check conditions"
+  - alias: "Re-check conditions after restart"
     continue_on_error: true
     if:
       - "{{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) < 1 }}"
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: "HA Start"
+        - condition: state
+          entity_id: "{{ input_update_process_started_entity }}"
+          state: "on"
+    then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: "{{ input_update_process_started_entity }}"
+      - alias: If Telegram notifications are enabled send telegram message to specified target.
+        if:
+          - condition: template
+            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            alias: Check if telegram notifications are enabled
+        then:
+          - data:
+              message: "We dont have any updates to work on. Exiting..."
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+            alias: Telegram Houseofnerds Message to group chat
+            action: telegram_bot.send_message
+      - stop: Nothing to update
+    else: []
+
+  - alias: "check conditions on first run"
+    continue_on_error: true
+    if:
+      - "{{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) < 1 }}"
+      - condition: and
+        conditions:
+        - condition: not
+          conditions:
+          - condition: trigger
+            id: "HA Start"
+        - condition: state
+          entity_id: "{{ input_update_process_started_entity }}"
+          state: "off"
     then:
       - action: input_boolean.turn_off
         target:
@@ -450,7 +489,6 @@ action:
             action: telegram_bot.send_message
       - stop: Nothing to update
     else: []
-
   ########## Starting ##########
   - alias: "Logbook - variables"
     continue_on_error: true
