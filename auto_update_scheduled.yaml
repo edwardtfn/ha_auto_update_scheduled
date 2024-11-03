@@ -437,7 +437,7 @@ action:
         - condition: trigger
           id: "HA Start"
         - condition: state
-          entity_id: "{{ input_update_process_started_entity }}"
+          entity_id: !input update_process_started_entity
           state: "on"
     then:
       - action: input_boolean.turn_off
@@ -469,7 +469,7 @@ action:
           - condition: trigger
             id: "HA Start"
         - condition: state
-          entity_id: "{{ input_update_process_started_entity }}"
+          entity_id: !input update_process_started_entity
           state: "off"
     then:
       - action: input_boolean.turn_off
