@@ -440,14 +440,6 @@ trigger_variables:
         | rejectattr('entity_id', 'in', input_update_exclusions)
         | map(attribute='entity_id')
         | list
-      }}
-    {% elif input_update_inclusion_mode == "specified" %}
-      {{
-        input_update_inclusion_entity_list | default([])
-        | selectattr('state','eq','on')
-        | rejectattr('entity_id', 'in', input_update_exclusions)
-        | map(attribute='entity_id')
-        | list
         | first
       }}
     {% elif input_update_inclusion_mode == "searchstring" %}
