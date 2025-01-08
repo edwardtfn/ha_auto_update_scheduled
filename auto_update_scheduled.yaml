@@ -426,15 +426,50 @@ trigger_variables:
 
   updates_list: &refresh_updates_list >
     {% if input_update_inclusion_mode == "all" %}
-      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+      {{
+        states.update | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | map(attribute='entity_id')
+        | list
+      }}
     {% elif input_update_inclusion_mode == "specified" %}
-      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+      {{
+        input_update_inclusion_entity_list | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | map(attribute='entity_id')
+        | list
+      }}
     {% elif input_update_inclusion_mode == "specified" %}
-      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+      {{
+        input_update_inclusion_entity_list | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | map(attribute='entity_id')
+        | list
+        | first
+      }}
     {% elif input_update_inclusion_mode == "searchstring" %}
-      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
+      {{
+        states.update | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+        | map(attribute='entity_id')
+        | sort
+        | list
+      }}
     {% elif input_update_inclusion_mode == "searchfilter-single" %}
-      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
+      {{
+        states.update | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+        | map(attribute='entity_id')
+        | sort
+        | first
+      }}
     {% endif %}
 
 trigger:
@@ -520,7 +555,7 @@ action:
           - data:
               message: '{{ this.entity_id }} is starting now.'
               target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              disable_notification: '{{ input_notification_telegram_disable_notification }}'
             alias: Telegram Houseofnerds Message to group chat
             action: telegram_bot.send_message
       - alias: "Logbook"
@@ -550,11 +585,11 @@ action:
             }}
           - condition: and
             conditions:
-            - condition: trigger
-              id: "HA Start"
-            - condition: state
-              entity_id: !input update_process_started_entity
-              state: "on"
+              - condition: trigger
+                id: "HA Start"
+              - condition: state
+                entity_id: !input update_process_started_entity
+                state: "on"
         then:
           - action: input_boolean.turn_off
             target:
@@ -568,7 +603,7 @@ action:
               - data:
                   message: "We dont have any updates to work on. Exiting..."
                   target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
                 alias: Telegram Houseofnerds Message to group chat
                 action: telegram_bot.send_message
           - stop: Nothing to update
@@ -590,13 +625,13 @@ action:
             }}
           - condition: and
             conditions:
-            - condition: not
-              conditions:
-              - condition: trigger
-                id: "HA Start"
-            - condition: state
-              entity_id: !input update_process_started_entity
-              state: "off"
+              - condition: not
+                conditions:
+                  - id: "HA Start"
+                    condition: trigger
+              - condition: state
+                entity_id: !input update_process_started_entity
+                state: "off"
         then:
           - action: input_boolean.turn_off
             target:
@@ -610,7 +645,7 @@ action:
               - data:
                   message: "We seem to have installed all needed Updates. Disabling the 'Update Process Started' entity and stopping update process."
                   target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
                 alias: Telegram Houseofnerds Message to group chat
                 action: telegram_bot.send_message
           - stop: Nothing to update
@@ -681,14 +716,14 @@ action:
               - data:
                   message: |
                     List of updates:
-                    - {{ states.update 
-                      | selectattr('state','eq','on') 
+                    - {{ states.update
+                      | selectattr('state','eq','on')
                       | selectattr('entity_id', 'in', pending_updates_list)
                       | rejectattr('entity_id', 'in', input_update_exclusions)
-                      | map(attribute='name') | list | join(' 
-                    - ') }}
+                      | map(attribute='name') | list | join('
+                      - ') }}
                   target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
                 alias: Telegram Houseofnerds Message to group chat
                 action: telegram_bot.send_message
 
@@ -761,7 +796,7 @@ action:
                   - data:
                       message: "Triggering Backup... "
                       target: "{{ input_notification_telegram_target_id }}"
-                      disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                      disable_notification: '{{ input_notification_telegram_disable_notification }}'
                     alias: Telegram Houseofnerds Message to group chat
                     action: telegram_bot.send_message
           - alias: "Call backup service"
@@ -784,7 +819,7 @@ action:
                   - data:
                       message: "Backup is triggered - Waiting defined time: {{ input_backup_timeout | int(60) }} minutes"
                       target: "{{ input_notification_telegram_target_id }}"
-                      disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                      disable_notification: '{{ input_notification_telegram_disable_notification }}'
                     alias: Telegram Houseofnerds Message to group chat
                     action: telegram_bot.send_message
               - alias: "Give x minutes for the backup" # There's no sensor for when the backup finishes
@@ -796,7 +831,7 @@ action:
                   - data:
                       message: "Backup Waittime finished. Continuing..."
                       target: "{{ input_notification_telegram_target_id }}"
-                      disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                      disable_notification: '{{ input_notification_telegram_disable_notification }}'
                     alias: Telegram Houseofnerds Message to group chat
                     action: telegram_bot.send_message
         else: []
@@ -865,10 +900,16 @@ action:
                   then:
                     - data:
                         message: |
-                          Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
-                          - ')  }} ...
+                          Updating {{
+                                      states.update
+                                      | selectattr('entity_id', 'in', pending_update_list[0])
+                                      | map(attribute='name')
+                                      | list
+                                      | join('
+                                      - ')
+                                    }} ...
                         target: "{{ input_notification_telegram_target_id }}"
-                        disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                        disable_notification: '{{ input_notification_telegram_disable_notification }}'
                       alias: Telegram Houseofnerds Message to group chat
                       action: telegram_bot.send_message
             - alias: "Update - Standard - Install"
@@ -927,7 +968,7 @@ action:
                     - data:
                         message: "Starting sequence of core items updates... "
                         target: "{{ input_notification_telegram_target_id }}"
-                        disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                        disable_notification: '{{ input_notification_telegram_disable_notification }}'
                       alias: Telegram Houseofnerds Message to group chat
                       action: telegram_bot.send_message
             - variables:
@@ -959,10 +1000,16 @@ action:
                   then:
                     - data:
                         message: |
-                          Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
-                          - ')  }} ...
+                          Updating {{
+                                      states.update
+                                      | selectattr('entity_id', 'in', pending_update_list[0])
+                                      | map(attribute='name')
+                                      | list
+                                      | join('
+                                      - ')
+                                    }} ...
                         target: "{{ input_notification_telegram_target_id }}"
-                        disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                        disable_notification: '{{ input_notification_telegram_disable_notification }}'
                       alias: Telegram Houseofnerds Message to group chat
                       action: telegram_bot.send_message
             - alias: "Update - Core - Install"
@@ -1021,7 +1068,7 @@ action:
                     - data:
                         message: "Starting sequence of OS updates... "
                         target: "{{ input_notification_telegram_target_id }}"
-                        disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                        disable_notification: '{{ input_notification_telegram_disable_notification }}'
                       alias: Telegram Houseofnerds Message to group chat
                       action: telegram_bot.send_message
             - variables:
@@ -1056,7 +1103,7 @@ action:
                           Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
                           - ')  }} ...
                         target: "{{ input_notification_telegram_target_id }}"
-                        disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                        disable_notification: '{{ input_notification_telegram_disable_notification }}'
                       alias: Telegram Houseofnerds Message to group chat
                       action: telegram_bot.send_message
             - alias: "Update - OS - Install"
@@ -1160,7 +1207,7 @@ action:
           - data:
               message: "Updating all remaining items (if any)."
               target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+              disable_notification: '{{ input_notification_telegram_disable_notification }}'
             alias: Telegram Houseofnerds Message to group chat
             action: telegram_bot.send_message
       - alias: "Update - Remaining - Install"
@@ -1216,7 +1263,7 @@ action:
               - data:
                   message: "Finishing update process."
                   target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
                 alias: Telegram Houseofnerds Message to group chat
                 action: telegram_bot.send_message
           - alias: "Logbook - Remaining updates"
@@ -1266,7 +1313,7 @@ action:
                       else 'None remaining'
                     }}
                   target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
                 alias: Telegram Houseofnerds Message to group chat
                 action: telegram_bot.send_message
 
@@ -1353,7 +1400,7 @@ action:
                   - data:
                       message: "Restart was asked by admin. Restarting Homeassistant... "
                       target: "{{ input_notification_telegram_target_id }}"
-                      disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
+                      disable_notification: '{{ input_notification_telegram_disable_notification }}'
                     alias: Telegram Houseofnerds Message to group chat
                     action: telegram_bot.send_message
               - alias: "Wait 15 seconds to deliver the telegram message."
