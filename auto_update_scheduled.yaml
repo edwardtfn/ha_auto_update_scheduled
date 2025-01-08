@@ -505,15 +505,15 @@ trigger:
 
 condition:
   # this cant be a condition for the whole automation because we have to "run" the automation to disable the input_boolean helper at the end of one complete update process
-  #- condition: template
-  #  value_template: >-
-  #    {{
-  #      states.update
-  #      | default([])
-  #      | selectattr("state", "eq", "on")
-  #      | rejectattr("entity_id", "in", input_update_exclusions)
-  #      | list | count | int(0) > 0
-  #    }}
+  # - condition: template
+  #   value_template: >-
+  #     {{
+  #       states.update
+  #       | default([])
+  #       | selectattr("state", "eq", "on")
+  #       | rejectattr("entity_id", "in", input_update_exclusions)
+  #       | list | count | int(0) > 0
+  #     }}
 
   - condition: template
     value_template: >
@@ -822,7 +822,7 @@ action:
                       disable_notification: '{{ input_notification_telegram_disable_notification }}'
                     alias: Telegram Houseofnerds Message to group chat
                     action: telegram_bot.send_message
-              - alias: "Give x minutes for the backup" # There's no sensor for when the backup finishes
+              - alias: "Give x minutes for the backup"  # There's no sensor for when the backup finishes
                 delay:
                   minutes: "{{ input_backup_timeout | int(60) }}"
               - alias: If Telegram notifications are enabled send telegram message to specified target.
@@ -1100,8 +1100,14 @@ action:
                   then:
                     - data:
                         message: |
-                          Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
-                          - ')  }} ...
+                          Updating {{
+                                      states.update
+                                      | selectattr('entity_id', 'in', pending_update_list[0])
+                                      | map(attribute='name')
+                                      | list
+                                      | join('
+                                      - ')
+                                    }} ...
                         target: "{{ input_notification_telegram_target_id }}"
                         disable_notification: '{{ input_notification_telegram_disable_notification }}'
                       alias: Telegram Houseofnerds Message to group chat
@@ -1274,13 +1280,12 @@ action:
               entity_id: '{{ this.entity_id }}'
               message: |
                 Remaining updates:
-                {{ '- ' + states.update 
+                {{ '- ' + states.update
                   | selectattr('state','eq','on')
                   | selectattr('entity_id', 'in', pending_updates_list)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
                   | map(attribute='name') | list | join('
 
-            
                 - ') if
                   states.update
                   | selectattr('state','eq','on')
@@ -1305,7 +1310,7 @@ action:
                       | map(attribute='name') | list | join('
 
                       - ') if
-                      states.update 
+                      states.update
                       | selectattr('state','eq','on')
                       | selectattr('entity_id', 'in', pending_updates_list)
                       | rejectattr('entity_id', 'in', input_update_exclusions)
@@ -1359,8 +1364,11 @@ action:
           - alias: "Restart - Check config"
             continue_on_error: true
             action: homeassistant.check_config
-          - if:
-              - "{{ states.persistent_notification.invalid_config.state | default('unavailable') == 'notifying' or states.persistent_notification.homeassistant_check_config.state | default('unavailable') == 'notifying' }}"
+          - if: >
+              {{
+                states.persistent_notification.invalid_config.state | default('unavailable') == 'notifying' or
+                states.persistent_notification.homeassistant_check_config.state | default('unavailable') == 'notifying'
+              }}
             then:
               - if: "{{ input_verbose_logging_bool }}"
                 then:
@@ -1404,7 +1412,7 @@ action:
                     alias: Telegram Houseofnerds Message to group chat
                     action: telegram_bot.send_message
               - alias: "Wait 15 seconds to deliver the telegram message."
-                delay: 
+                delay:
                   seconds: 15
               - alias: "Restart - Logbook - Restarting"
                 continue_on_error: true
@@ -1417,7 +1425,8 @@ action:
                 continue_on_error: true
                 action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
 
-        ########## Post-update actions ##########
+  - alias: Post-update actions
+    sequence:
       - if: "{{ input_verbose_logging_bool }}"
         then:
           - alias: "Logbook - Post-actions"
