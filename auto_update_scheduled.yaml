@@ -1,3 +1,4 @@
+---
 blueprint:
   name: Home Assistant Auto-update on a schedule base
   author: Edward Firmo (https://github.com/edwardtfn)
@@ -168,11 +169,11 @@ blueprint:
           name: Entity Inclusion Mode
           description: >-
             Please select the entity inclusion mode.
-            * All: 
+            * All:
               Just build the update entity list from all available update.* entities, which are in state 'on'.
-            * Specified: 
+            * Specified:
               Just build the update entity list from the specified entity list. Will also filter on the entities in 'on' state.
-            * Specified-Single: 
+            * Specified-Single:
               Same as specified, but will only update the first entity from the list.
             * Searchfilter:
               This works as a wildcard filter.
@@ -202,7 +203,7 @@ blueprint:
           description: >-
             => Important: This entity list will only be used when the Update Inclusion mode is set to "Specified" or "Specified-Single".
             Select the items which should be updated.
-          default: [ ]
+          default: []
           selector:
             entity:
               multiple: true
@@ -346,7 +347,8 @@ blueprint:
 
         notification_telegram_disable_notification:
           name: Disable the Telegram notification from the Telegram client.
-          description: This switches to a 'silent' message without a notification on other devices with a running telegram client.
+          description: >
+            This switches to a 'silent' message without a notification on other devices with a running telegram client.
           default: false
           selector:
             boolean:
@@ -359,7 +361,10 @@ blueprint:
       input:
         restart_type:
           name: Force Home Assistant to restart if required by any update?
-          description: This won't affect updates where a restart is automatic, but for updates requiring a manual restart (quite common on HACS) this blueprint can automatically force a restart by the end of the updates.
+          description: >
+            This won't affect updates where a restart is automatic,
+            but for updates requiring a manual restart (quite common on HACS)
+            this blueprint can automatically force a restart by the end of the updates.
           default: "no-restart"
           selector:
             select:
@@ -382,7 +387,8 @@ blueprint:
             You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
-            This entity will be used to determine if we still have to do a backup on automation start - so it is for inner workings of this automation.
+            This entity will be used to determine if we still have to do a backup
+            on automation start - so it is for inner workings of this automation.
 
             This saves you from getting multiple backups in the same update window.
           default: []
@@ -1393,3 +1399,4 @@ action:
               name: Auto-update
               entity_id: '{{ this.entity_id }}'
               message: Done!
+...
