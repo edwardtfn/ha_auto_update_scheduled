@@ -750,7 +750,10 @@ action:
             }}
       - alias: Check existing backups uploaded
         continue_on_error: true
-        if: '{{ input_max_backup_age_seconds > 0 }}'
+        if:
+          - '{{ not is_state("sensor.backup_state", "unknown") }}'
+          - '{{ not is_state("sensor.backup_state", "unavailable") }}'
+          - '{{ input_max_backup_age_seconds > 0 }}'
         then:
           - variables:
               last_backup_timestamp_list: >
