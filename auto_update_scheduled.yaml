@@ -501,7 +501,11 @@ trigger:
     value_template: >
       {{
         (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
-        (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
+        (
+          now().day <= input_schedule_monthday_last or
+          input_schedule_monthday_last == 0 or
+          input_schedule_monthday_last < input_schedule_monthday_earliest
+        )
       }}
   - id: Automations reloaded
     platform: event
