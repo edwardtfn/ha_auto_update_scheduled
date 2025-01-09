@@ -1151,7 +1151,7 @@ action:
               - variables:
                   log_message: >
                     Restart was asked by admin.
-                    
+
                     Restarting Home Assistant ({{ input_restart_type }})
               - *logbook_update
               - *send_telegram_message
