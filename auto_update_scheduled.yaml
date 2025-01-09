@@ -1235,11 +1235,18 @@ action:
           - alias: "Restart - Check config"
             continue_on_error: true
             action: homeassistant.check_config
-          - if: >
-              {{
-                states.persistent_notification.invalid_config.state | default('unavailable') == 'notifying' or
-                states.persistent_notification.homeassistant_check_config.state | default('unavailable') == 'notifying'
-              }}
+          - variables:
+              has_invalid_config: >
+                {{
+                  states.persistent_notification.invalid_config.state
+                  | default('unavailable') == 'notifying'
+                }}
+              has_check_config_notification: >
+                {{
+                  states.persistent_notification.homeassistant_check_config.state
+                  | default('unavailable') == 'notifying'
+                }}
+          - if: '{{ has_invalid_config or has_check_config_notification }}'
             then:
               - variables:
                   log_message: "Running pre-restart actions..."
@@ -1252,8 +1259,10 @@ action:
               - variables:
                   log_message: >
                     Skipping restart process due to notifications of invalid configurations:
-                    states.persistent_notification.invalid_config.state = {{ states.persistent_notification.invalid_config.state | default('unavailable') }},
-                    states.persistent_notification.homeassistant_check_config.state = {{ states.persistent_notification.homeassistant_check_config.state | default('unavailable') }}
+
+                      - has_invalid_config = {{ has_invalid_config }}
+
+                      - has_check_config_notification = {{ has_check_config_notification }}
               - *logbook_update
               - *send_telegram_message
             else:
