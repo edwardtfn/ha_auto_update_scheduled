@@ -1,3 +1,21 @@
+####################################################################################################
+#####                        Home Assistant Auto-update on Schedule                            #####
+#####             Repository: https://github.com/edwardtfn/ha_auto_update_scheduled            #####
+####################################################################################################
+##### Purpose: YAML blueprint to automatically update Home Assistant and its components when   #####
+#####          updates are available, following a schedule and with configurable options.      #####
+####################################################################################################
+##### Author: edwardtfn - https://github.com/edwardtfn - https://buymeacoffee.com/edwardfirmo  #####
+####################################################################################################
+##### NOTE:                                                                                    #####
+##### - Home Assistant may restart automatically as part of the update process.                #####
+##### - Use under your own risk! Please review Home Assistant community discussions about      #####
+#####   the risks involved in auto-updating the system.                                        #####
+##### - For discussions:                                                                       #####
+#####     https://community.home-assistant.io/t/459281                                         #####
+##### - For support and bug reports:                                                           #####
+#####     https://github.com/edwardtfn/ha_auto_update_scheduled/issues                         #####
+####################################################################################################
 ---
 blueprint:
   name: Home Assistant Auto-update on a schedule base
