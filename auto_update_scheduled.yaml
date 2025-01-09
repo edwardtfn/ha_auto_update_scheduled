@@ -258,6 +258,23 @@ blueprint:
               max: 600
               unit_of_measurement: minutes
 
+        max_backup_age:
+          name: Maximum backup age (or zero, to disable) (optional)
+          description:
+            This requires the [Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
+            addon to be installed and configured to automatically backup, and provide
+            a sensor with the backup states. The setting only checks for the age of
+            the automatic backups from that addon, not the backups created internally
+            by this blueprint.
+          default:
+            days: 0
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
+              enable_day: true
+
         backup_location:
           name: Backup Location
           description: >-
@@ -745,6 +762,17 @@ action:
 
   - alias: Backup
     sequence:
+      - variables:
+          temp_max_backup_age: !input max_backup_age
+          input_max_backup_age_seconds: >
+            {{
+              timedelta(
+                days=temp_max_backup_age.days,
+                hours=temp_max_backup_age.hours,
+                minutes=temp_max_backup_age.minutes,
+                seconds=temp_max_backup_age.seconds
+              ).total_seconds()
+            }}
       - alias: Check existing backups uploaded
         continue_on_error: true
         if: '{{ input_max_backup_age_seconds > 0 }}'
@@ -829,7 +857,7 @@ action:
                 if: '{{ input_notification_telegram_enable }}'
                 then:
                   - data:
-                      message: "Backup Waittime finished. Continuing..."
+                      message: "Backup Wait time finished. Continuing..."
                       target: "{{ input_notification_telegram_target_id }}"
                       disable_notification: '{{ input_notification_telegram_disable_notification }}'
                     alias: Telegram Houseofnerds Message to group chat
