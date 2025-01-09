@@ -171,10 +171,10 @@ blueprint:
             Please select the entity inclusion mode.
             * All:
               Just build the update entity list from all available update.* entities, which are in state 'on'.
-            * Specified:
-              Just build the update entity list from the specified entity list. Will also filter on the entities in 'on' state.
-            * Specified-Single:
-              Same as specified, but will only update the first entity from the list.
+            * Specified/Specified-Single:
+              Build the update entity list from the specified entity list, filtering for entities in 'on' state.
+              - Specified: Updates all matching entities
+              - Specified-Single: Updates only the first matching entity
             * Searchfilter:
               This works as a wildcard filter.
               Examples:
