@@ -68,8 +68,10 @@ blueprint:
             Some people consider those releases as not stable enough and prefer to avoid those versions,
             not updating the system until the mid of the month (day 15).
 
-            Note => If you select a day higher than 28 the updates won't run every month.
-          default: 1
+            Notes:
+              - If you select a day higher than 28 the updates won't run every month.
+              - Selecting `0` will disable the check.
+          default: 0
           selector:
             number:
               min: 1
@@ -79,12 +81,15 @@ blueprint:
 
         schedule_monthday_last:
           name: Latest day in the month to run the update process
-          description: 'Specify the latest day in month, on which this update can run.
-            Note => If you select a day lower than the Earliest Day in month then the update will never run.'
-          default: 1
+          description: >
+            Specify the latest day in month, on which this update can run.
+
+            Note:
+              - Selecting `0` or a date lower than the "Earliest Day" will disable the check.
+          default: 0
           selector:
             number:
-              min: 1
+              min: 0
               max: 31
               step: 1
               mode: slider
@@ -464,8 +469,10 @@ trigger_variables:
       if (updates_available_obj | list | count | int(0) > 0)
       else []
     }}
-  input_schedule_monthday_earliest: !input schedule_monthday_earliest
-  input_schedule_monthday_last: !input schedule_monthday_last
+  schedule_monthday_earliest: !input schedule_monthday_earliest
+  schedule_monthday_last: !input schedule_monthday_last
+  input_schedule_monthday_earliest: '{{ schedule_monthday_earliest | int(0) }}'
+  input_schedule_monthday_last: '{{ schedule_monthday_last | int(0) }}'
   input_update_inclusion_mode: !input update_inclusion_mode
   input_update_inclusion_entity_list: !input update_inclusion_entity_list
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
@@ -542,8 +549,8 @@ trigger:
     platform: template
     value_template: >
       {{
-        now().day >= (input_schedule_monthday_earliest | int(0)) and
-        now().day <= (input_schedule_monthday_last     | int(0))
+        (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
+        (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
       }}
   - id: Automations reloaded
     platform: event
@@ -567,8 +574,8 @@ condition:
   - condition: template
     value_template: >
       {{
-        now().day >= (input_schedule_monthday_earliest | int(0)) and
-        now().day <= (input_schedule_monthday_last     | int(0))
+        (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
+        (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
       }}
 
   - condition: or
