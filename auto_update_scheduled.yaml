@@ -1,3 +1,22 @@
+####################################################################################################
+#####                        Home Assistant Auto-update on Schedule                            #####
+#####             Repository: https://github.com/edwardtfn/ha_auto_update_scheduled            #####
+####################################################################################################
+##### Purpose: YAML blueprint to automatically update Home Assistant and its components when   #####
+#####          updates are available, following a schedule and with configurable options.      #####
+####################################################################################################
+##### Author: edwardtfn - https://github.com/edwardtfn - https://buymeacoffee.com/edwardfirmo  #####
+####################################################################################################
+##### NOTE:                                                                                    #####
+##### - Home Assistant may restart automatically as part of the update process.                #####
+##### - Use under your own risk! Please review Home Assistant community discussions about      #####
+#####   the risks involved in auto-updating the system.                                        #####
+##### - For discussions:                                                                       #####
+#####     https://community.home-assistant.io/t/459281                                         #####
+##### - For support and bug reports:                                                           #####
+#####     https://github.com/edwardtfn/ha_auto_update_scheduled/issues                         #####
+####################################################################################################
+---
 blueprint:
   name: Home Assistant Auto-update on a schedule base
   author: Edward Firmo (https://github.com/edwardtfn)
@@ -49,8 +68,10 @@ blueprint:
             Some people consider those releases as not stable enough and prefer to avoid those versions,
             not updating the system until the mid of the month (day 15).
 
-            Note => If you select a day higher than 28 the updates won't run every month.
-          default: 1
+            Notes:
+              - If you select a day higher than 28 the updates won't run every month.
+              - Selecting `0` will disable the check.
+          default: 0
           selector:
             number:
               min: 1
@@ -60,12 +81,15 @@ blueprint:
 
         schedule_monthday_last:
           name: Latest day in the month to run the update process
-          description: 'Specify the latest day in month, on which this update can run.
-            Note => If you select a day lower than the Earliest Day in month then the update will never run.'
-          default: 1
+          description: >
+            Specify the latest day in month, on which this update can run.
+
+            Note:
+              - Selecting `0` or a date lower than the "Earliest Day" will disable the check.
+          default: 0
           selector:
             number:
-              min: 1
+              min: 0
               max: 31
               step: 1
               mode: slider
@@ -168,12 +192,12 @@ blueprint:
           name: Entity Inclusion Mode
           description: >-
             Please select the entity inclusion mode.
-            * All: 
+            * All:
               Just build the update entity list from all available update.* entities, which are in state 'on'.
-            * Specified: 
-              Just build the update entity list from the specified entity list. Will also filter on the entities in 'on' state.
-            * Specified-Single: 
-              Same as specified, but will only update the first entity from the list.
+            * Specified/Specified-Single:
+              Build the update entity list from the specified entity list, filtering for entities in 'on' state.
+              - Specified: Updates all matching entities
+              - Specified-Single: Updates only the first matching entity
             * Searchfilter:
               This works as a wildcard filter.
               Examples:
@@ -202,7 +226,7 @@ blueprint:
           description: >-
             => Important: This entity list will only be used when the Update Inclusion mode is set to "Specified" or "Specified-Single".
             Select the items which should be updated.
-          default: [ ]
+          default: []
           selector:
             entity:
               multiple: true
@@ -256,6 +280,23 @@ blueprint:
               min: 1
               max: 600
               unit_of_measurement: minutes
+
+        max_backup_age:
+          name: Maximum backup age (or zero, to disable) (optional)
+          description:
+            This requires the [Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
+            addon to be installed and configured to automatically backup, and provide
+            a sensor with the backup states. The setting only checks for the age of
+            the automatic backups from that addon, not the backups created internally
+            by this blueprint.
+          default:
+            days: 0
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
+              enable_day: true
 
         backup_location:
           name: Backup Location
@@ -346,7 +387,8 @@ blueprint:
 
         notification_telegram_disable_notification:
           name: Disable the Telegram notification from the Telegram client.
-          description: This switches to a 'silent' message without a notification on other devices with a running telegram client.
+          description: >
+            This switches to a 'silent' message without a notification on other devices with a running telegram client.
           default: false
           selector:
             boolean:
@@ -359,7 +401,10 @@ blueprint:
       input:
         restart_type:
           name: Force Home Assistant to restart if required by any update?
-          description: This won't affect updates where a restart is automatic, but for updates requiring a manual restart (quite common on HACS) this blueprint can automatically force a restart by the end of the updates.
+          description: >
+            This won't affect updates where a restart is automatic,
+            but for updates requiring a manual restart (quite common on HACS)
+            this blueprint can automatically force a restart by the end of the updates.
           default: "no-restart"
           selector:
             select:
@@ -371,18 +416,21 @@ blueprint:
                   value: "core"
                 - label: "Restart Home Assistant host"
                   value: "host"
+
         verbose_logging_bool:
           name: Log addon progress with verbosity to the logbook? (optional)
           default: false
           selector:
             boolean: {}
+
         update_process_started_entity:
           name: '"Update Process Started" Toggle Entity (optional)'
           description: >
             You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
-            This entity will be used to determine if we still have to do a backup on automation start - so it is for inner workings of this automation.
+            This entity will be used to determine if we still have to do a backup
+            on automation start - so it is for inner workings of this automation.
 
             This saves you from getting multiple backups in the same update window.
           default: []
@@ -391,10 +439,22 @@ blueprint:
               multiple: false
               domain: input_boolean
 
+        update_timeout:
+          name: Update Timeout
+          description: Maximum time to wait for each update to complete
+          default: 3600
+          selector:
+            number:
+              min: 300
+              max: 7200
+              unit_of_measurement: seconds
+              mode: box
+
 mode: single
 max_exceeded: warning
 
 trigger_variables:
+  input_pause_entities: !input pause_entities
   input_update_exclusions: !input update_exclusions
   input_update_out_of_schedule: !input update_out_of_schedule
   updates_available: >
@@ -409,8 +469,10 @@ trigger_variables:
       if (updates_available_obj | list | count | int(0) > 0)
       else []
     }}
-  input_schedule_monthday_earliest: !input schedule_monthday_earliest
-  input_schedule_monthday_last: !input schedule_monthday_last
+  schedule_monthday_earliest: !input schedule_monthday_earliest
+  schedule_monthday_last: !input schedule_monthday_last
+  input_schedule_monthday_earliest: '{{ schedule_monthday_earliest | int(0) }}'
+  input_schedule_monthday_last: '{{ schedule_monthday_last | int(0) }}'
   input_update_inclusion_mode: !input update_inclusion_mode
   input_update_inclusion_entity_list: !input update_inclusion_entity_list
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
@@ -420,15 +482,50 @@ trigger_variables:
 
   updates_list: &refresh_updates_list >
     {% if input_update_inclusion_mode == "all" %}
-      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
+      {{
+        states.update | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | map(attribute='entity_id')
+        | list
+      }}
     {% elif input_update_inclusion_mode == "specified" %}
-      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list }}
-    {% elif input_update_inclusion_mode == "specified" %}
-      {{ input_update_inclusion_entity_list | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | map(attribute='entity_id') | list | first }}
+      {{
+        input_update_inclusion_entity_list | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | map(attribute='entity_id')
+        | list
+      }}
+    {% elif input_update_inclusion_mode == "specified-single" %}
+      {{
+        input_update_inclusion_entity_list | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | map(attribute='entity_id')
+        | list
+        | first
+      }}
     {% elif input_update_inclusion_mode == "searchstring" %}
-      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | list }}
+      {{
+        states.update | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+        | map(attribute='entity_id')
+        | sort
+        | list
+      }}
     {% elif input_update_inclusion_mode == "searchfilter-single" %}
-      {{ states.update | default([]) | selectattr('state','eq','on') | rejectattr('entity_id', 'in', input_update_exclusions) | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter) | map(attribute='entity_id') | sort | first }}
+      {{
+        states.update | default([])
+        | selectattr('state','eq','on')
+        | rejectattr('entity_id', 'in', input_update_exclusions)
+        | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+        | map(attribute='entity_id')
+        | sort
+        | first
+      }}
     {% endif %}
 
 trigger:
@@ -452,8 +549,8 @@ trigger:
     platform: template
     value_template: >
       {{
-        now().day >= (input_schedule_monthday_earliest | int(0)) and
-        now().day <= (input_schedule_monthday_last     | int(0))
+        (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
+        (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
       }}
   - id: Automations reloaded
     platform: event
@@ -464,21 +561,21 @@ trigger:
 
 condition:
   # this cant be a condition for the whole automation because we have to "run" the automation to disable the input_boolean helper at the end of one complete update process
-  #- condition: template
-  #  value_template: >-
-  #    {{
-  #      states.update
-  #      | default([])
-  #      | selectattr("state", "eq", "on")
-  #      | rejectattr("entity_id", "in", input_update_exclusions)
-  #      | list | count | int(0) > 0
-  #    }}
+  # - condition: template
+  #   value_template: >-
+  #     {{
+  #       states.update
+  #       | default([])
+  #       | selectattr("state", "eq", "on")
+  #       | rejectattr("entity_id", "in", input_update_exclusions)
+  #       | list | count | int(0) > 0
+  #     }}
 
   - condition: template
     value_template: >
       {{
-        now().day >= (input_schedule_monthday_earliest | int(0)) and
-        now().day <= (input_schedule_monthday_last     | int(0))
+        (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
+        (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
       }}
 
   - condition: or
@@ -489,138 +586,173 @@ condition:
         state: 'off'
 
 variables:
-  input_pause_entities: !input pause_entities
-  temp_input_update_exclusions: !input update_exclusions
   input_verbose_logging_bool: !input verbose_logging_bool
-  input_backup_bool: !input backup_bool
-  input_backup_timeout_minutes: !input backup_timeout
-  input_backup_timeout: '{{ input_backup_timeout_minutes | int(60) }}'
-  input_restart_type: !input restart_type
   input_core_os_update_mode: !input core_os_update_mode
   input_firmware_update_mode: !input firmware_update_mode
   input_general_update_mode: !input general_update_mode
   updates_list: *refresh_updates_list
-  pending_updates_list: []
+  pending_updates_list: '{{ updates_list }}'
+  input_update_timeout: !input update_timeout
 
 action:
-  ######### Inform logbook and telegram which update automation is running #########
-  - alias: If Telegram notifications are enabled send telegram message to specified target.
-    if:
-      - condition: template
-        value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-        alias: Check if telegram notifications are enabled
-    then:
-      - data:
-          message: '{{ this.entity_id }} is starting now.'
-          target: "{{ input_notification_telegram_target_id }}"
-          disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-        alias: Telegram Houseofnerds Message to group chat
-        action: telegram_bot.send_message
-  - alias: "Logbook"
-    continue_on_error: true
-    service: logbook.log
-    data:
-      name: Inform which update automation is running
-      entity_id: '{{ this.entity_id }}'
-      message: '{{ this.entity_id }} is starting now.'
+  - &recalc_update_list
+    variables:
+      core_update_entity: >
+            {% for u in integration_entities('hassio') | select('search', '^update[.]')
+                    if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
+                {{ u }}
+            {% endfor %}
+      os_update_entity: >
+            {% for u in integration_entities('hassio') | select('search', '^update[.]')
+                    if (device_attr(u, 'identifiers') | first)[1] == 'OS' %}
+                {{ u }}
+            {% endfor %}
+      supervisor_update_entity: >
+            {% for u in integration_entities('hassio') | select('search', '^update[.]')
+                    if (device_attr(u, 'identifiers') | first)[1] == 'supervisor' %}
+                {{ u }}
+            {% endfor %}
+      firmware_update_entities: >
+            {{ states.update
+              | default([])
+              | selectattr('attributes.device_class', 'defined')
+              | selectattr('attributes.device_class', 'eq', 'firmware')
+              | map(attribute='entity_id')
+              | list
+            }}
+      general_update_entities: >
+        {{ states.update
+          | default([])
+          | rejectattr('entity_id', 'in', core_update_entity)
+          | rejectattr('entity_id', 'in', os_update_entity)
+          | rejectattr('entity_id', 'in', supervisor_update_entity)
+          | rejectattr('entity_id', 'in', firmware_update_entities)
+          | map(attribute='entity_id')
+          | list
+        }}
 
-  ########## Check for skipping core/OS ##########
-  - alias: "Re-check conditions after restart"
-    continue_on_error: true
-    if:
-      - >
-        {{
-          (
-            states.update
-            | selectattr('state','eq','on')
-            | selectattr('entity_id', 'in', updates_list)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | list
-            | count
-            | int(0)
-          ) < 1
-        }}
-      - condition: and
-        conditions:
-        - condition: trigger
-          id: "HA Start"
-        - condition: state
-          entity_id: !input update_process_started_entity
-          state: "on"
-    then:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: "{{ input_update_process_started_entity }}"
-      - alias: If Telegram notifications are enabled send telegram message to specified target.
+  - alias: Preparation  # Inform logbook and telegram which update automation is running
+    sequence:
+      - *recalc_update_list
+      - variables:
+          log_message: '{{ this.entity_id }} is starting now.'
+      - &send_telegram_message
+        alias: Send telegram message
         if:
           - condition: template
-            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
+            value_template: '{{ input_notification_telegram_enable }}'
             alias: Check if telegram notifications are enabled
         then:
-          - data:
-              message: "We dont have any updates to work on. Exiting..."
-              target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-            alias: Telegram Houseofnerds Message to group chat
+          - alias: Telegram bot - Send message
             action: telegram_bot.send_message
-      - stop: Nothing to update
-    else: []
-  - alias: "check conditions on first run"
-    continue_on_error: true
-    if:
-      - >
-        {{
-          (
-            states.update
-            | selectattr('state','eq','on')
-            | selectattr('entity_id', 'in', updates_list)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | list
-            | count
-            | int(0)
-          ) < 1
-        }}
-      - condition: and
-        conditions:
-        - condition: not
-          conditions:
-          - condition: trigger
-            id: "HA Start"
-        - condition: state
-          entity_id: !input update_process_started_entity
-          state: "off"
-    then:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: "{{ input_update_process_started_entity }}"
-      - alias: If Telegram notifications are enabled send telegram message to specified target.
-        if:
-          - condition: template
-            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-            alias: Check if telegram notifications are enabled
+            data:
+              message: '{{ log_message }}'
+              target: "{{ input_notification_telegram_target_id }}"
+              disable_notification: '{{ input_notification_telegram_disable_notification }}'
+      - &logbook_update
+        if: "{{ input_verbose_logging_bool }}"
         then:
-          - data:
-              message: "We seem to have installed all needed Updates. Disabling the 'Update Process Started' entity and stopping update process."
-              target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-            alias: Telegram Houseofnerds Message to group chat
-            action: telegram_bot.send_message
-      - stop: Nothing to update
-    else: []
-  ########## Starting ##########
-  - &logbook-variables
-    if: "{{ input_verbose_logging_bool }}"
-    then:
-      - alias: Logbook - variables
+          - alias: Logbook - Update
+            action: logbook.log
+            data:
+              name: Auto-update
+              entity_id: '{{ this.entity_id }}'
+              message: '{{ log_message }}'
+            continue_on_error: true
         continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: >-
+
+  - alias: Check for skipping core/OS
+    sequence:
+      - *recalc_update_list
+      - alias: "Re-check conditions after restart"
+        continue_on_error: true
+        if:
+          - >
+            {{
+              (
+                states.update
+                | selectattr('state','eq','on')
+                | selectattr('entity_id', 'in', pending_updates_list)
+                | rejectattr('entity_id', 'in', input_update_exclusions)
+                | list
+                | count
+                | int(0)
+              ) < 1
+            }}
+          - condition: and
+            conditions:
+              - condition: trigger
+                id: "HA Start"
+              - condition: state
+                entity_id: !input update_process_started_entity
+                state: "on"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: "{{ input_update_process_started_entity }}"
+          - alias: If Telegram notifications are enabled send telegram message to specified target.
+            if:
+              - condition: template
+                value_template: '{{ input_notification_telegram_enable }}'
+                alias: Check if telegram notifications are enabled
+            then:
+              - data:
+                  message: "We dont have any updates to work on. Exiting..."
+                  target: "{{ input_notification_telegram_target_id }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
+                alias: Telegram Houseofnerds Message to group chat
+                action: telegram_bot.send_message
+          - stop: Nothing to update
+        else: []
+      - alias: "check conditions on first run"
+        continue_on_error: true
+        if:
+          - >
+            {{
+              (
+                states.update
+                | selectattr('state','eq','on')
+                | selectattr('entity_id', 'in', pending_updates_list)
+                | rejectattr('entity_id', 'in', input_update_exclusions)
+                | list
+                | count
+                | int(0)
+              ) < 1
+            }}
+          - condition: and
+            conditions:
+              - condition: not
+                conditions:
+                  - id: "HA Start"
+                    condition: trigger
+              - condition: state
+                entity_id: !input update_process_started_entity
+                state: "off"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: "{{ input_update_process_started_entity }}"
+          - alias: If Telegram notifications are enabled send telegram message to specified target.
+            if:
+              - condition: template
+                value_template: '{{ input_notification_telegram_enable }}'
+                alias: Check if telegram notifications are enabled
+            then:
+              - data:
+                  message: "We seem to have installed all needed Updates. Disabling the 'Update Process Started' entity and stopping update process."
+                  target: "{{ input_notification_telegram_target_id }}"
+                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
+                alias: Telegram Houseofnerds Message to group chat
+                action: telegram_bot.send_message
+          - stop: Nothing to update
+        else: []
+
+  - alias: Starting
+    sequence:
+      - *recalc_update_list
+      - variables:
+          log_message: >-
             Variables:
-              input_backup_bool: {{ input_backup_bool }},
-              input_restart_type: {{ input_restart_type }},
               input_verbose_logging_bool: {{ input_verbose_logging_bool }},
               input_schedule_monthday_earliest: {{ input_schedule_monthday_earliest }},
               input_schedule_monthday_last: {{ input_schedule_monthday_last }},
@@ -633,523 +765,356 @@ action:
               supervisor_update_entity: {{ supervisor_update_entity }},
               firmware_update_entities: {{ firmware_update_entities }},
               general_update_entities: {{ general_update_entities }},
-              updates_list: {{ updates_list }}
-    continue_on_error: true
+              updates_list: {{ updates_list }},
+              pending_updates_list: {{ pending_updates_list }}
+      - *logbook_update
 
-  - if: "{{ input_verbose_logging_bool }}"
-    then:
-      - alias: "Logbook - A new update is available"
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          domain: update
-          message: A new update is available for Home Assistant.
-      - alias: "Logbook - List of updates"
-        continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          domain: update
-          message: >
-            List of updates:
-            - {{ states.update
-              | selectattr('state','eq','on')
-              | selectattr('entity_id', 'in', pending_updates_list)
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='name') | list | join('
-
-            - ') }}
-
-      - alias: If Telegram notifications are enabled send telegram message to specified target.
-        if:
-          - condition: template
-            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-            alias: Check if telegram notifications are enabled
-        then:
-          - data:
-              message: |
-                List of updates:
-                - {{ states.update 
-                  | selectattr('state','eq','on') 
-                  | selectattr('entity_id', 'in', updates_list)
-                  | rejectattr('entity_id', 'in', input_update_exclusions)
-                  | map(attribute='name') | list | join(' 
-                - ') }}
-              target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-            alias: Telegram Houseofnerds Message to group chat
-            action: telegram_bot.send_message
-
-      - alias: "Logbook: Running pre-update actions"
-        continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: Running pre-update actions...
-    continue_on_error: true
-
-  - alias: "Run pre-update actions"
-    continue_on_error: true
-    choose:
-      - conditions:
-          - '{{ true }}'
-        sequence: !input actions_pre_update
-    default: []
-
-  ########## Backup ##########
-  - alias: Check existing backups uploaded
-    continue_on_error: true
-    if: '{{ input_max_backup_age_seconds > 0 }}'
-    then:
       - variables:
-          last_backup_timestamp_list: >
-            {{
-              states.sensor
-              | selectattr("attributes.last_backup", "defined")
-              | map(attribute="attributes.last_backup")
-              | list
-            }}
-          last_backup_timestamp: '{{ last_backup_timestamp_list | max if last_backup_timestamp_list | count > 0 else None }}'
-      - alias: Check if backup state is defined
-        if: '{{ last_backup_timestamp != None }}'
-        then:
-          - stop: "Backup State sensor not found"
-      - alias: Check age of last uploaded backup
-        if: >-
-          {{ as_timestamp(now()) - as_timestamp(last_backup_timestamp) > input_max_backup_age_seconds }}
-        then:
-          - stop: "Last uploaded backup is too old"
-  - alias: "Backup"
-    continue_on_error: true
-    if:
-      - '{{ input_backup_bool }}'
-      - condition: state
-        entity_id: !input update_process_started_entity
-        state: 'off'
-    then:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: "{{ input_update_process_started_entity }}"
-      - if: "{{ input_verbose_logging_bool }}"
-        then:
-          - alias: "Logbook - Backing up"
-            continue_on_error: true
-            action: logbook.log
-            data:
-              name: Auto-update
-              entity_id: '{{ this.entity_id }}'
-              message: Backing up Home Assistant.
-          - alias: If Telegram notifications are enabled send telegram message to specified target.
-            if:
-              - condition: template
-                value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                alias: Check if telegram notifications are enabled
-            then:
-              - data:
-                  message: "Triggering Backup... "
-                  target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                alias: Telegram Houseofnerds Message to group chat
-                action: telegram_bot.send_message
-      - alias: "Call backup service"
+          log_message: "A new update is available for Home Assistant."
+      - *logbook_update
+
+      - variables:
+          log_message: >
+            List of updates:
+              - {{ states.update
+                | selectattr('state','eq','on')
+                | selectattr('entity_id', 'in', pending_updates_list)
+                | rejectattr('entity_id', 'in', input_update_exclusions)
+                | map(attribute='name') | list | join('
+
+              - ') }}
+      - *logbook_update
+      - *send_telegram_message
+
+  - alias: Pre-update actions
+    sequence:
+      - *recalc_update_list
+      - variables:
+          log_message: "Running pre-update actions..."
+      - *logbook_update
+
+      - alias: "Run pre-update actions"
         continue_on_error: true
-        action: hassio.backup_full
-        data:
-          compressed: true
-      - if: "{{ input_verbose_logging_bool }}"
+        sequence: !input actions_pre_update
+
+  - alias: Backup
+    sequence:
+      - *recalc_update_list
+      - variables:
+          input_backup_bool: !input backup_bool
+          input_backup_timeout_minutes: !input backup_timeout
+          input_backup_timeout: '{{ input_backup_timeout_minutes | int(60) }}'
+          temp_max_backup_age: !input max_backup_age
+          input_max_backup_age_seconds: >
+            {{
+              timedelta(
+                days=temp_max_backup_age.days,
+                hours=temp_max_backup_age.hours,
+                minutes=temp_max_backup_age.minutes,
+                seconds=temp_max_backup_age.seconds
+              ).total_seconds()
+            }}
+      - alias: Check existing backups uploaded
+        continue_on_error: true
+        if:
+          - '{{ not is_state("sensor.backup_state", "unknown") }}'
+          - '{{ not is_state("sensor.backup_state", "unavailable") }}'
+          - '{{ input_max_backup_age_seconds > 0 }}'
         then:
-          - alias: "Backup triggered"
-            continue_on_error: true
-            action: logbook.log
-            data:
-              name: Auto-update
-              entity_id: '{{ this.entity_id }}'
-              message: Backup triggered
-          - alias: If Telegram notifications are enabled send telegram message to specified target.
-            if: '{{ input_notification_telegram_enable }}'
+          - variables:
+              last_backup_timestamp_list: >
+                {{
+                  states.sensor
+                  | selectattr("attributes.last_backup", "defined")
+                  | map(attribute="attributes.last_backup")
+                  | list
+                }}
+              last_backup_timestamp: '{{ last_backup_timestamp_list | max if last_backup_timestamp_list | count > 0 else None }}'
+          - alias: Check if backup state is defined
+            if: '{{ last_backup_timestamp != None }}'
             then:
-              - data:
-                  message: "Backup is triggered - Waiting defined time: {{ input_backup_timeout | int(60) }} minutes"
-                  target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                alias: Telegram Houseofnerds Message to group chat
-                action: telegram_bot.send_message
-          - alias: "Give x minutes for the backup" # There's no sensor for when the backup finishes
+              - stop: "Backup State sensor not found"
+          - alias: Check age of last uploaded backup
+            if: >-
+              {{ as_timestamp(now()) - as_timestamp(last_backup_timestamp) > input_max_backup_age_seconds }}
+            then:
+              - stop: "Last uploaded backup is too old"
+      - alias: "Backup"
+        continue_on_error: true
+        if:
+          - '{{ input_backup_bool }}'
+          - condition: state
+            entity_id: !input update_process_started_entity
+            state: 'off'
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: "{{ input_update_process_started_entity }}"
+            continue_on_error: true
+          - variables:
+              log_message: "Backing up Home Assistant"
+          - *logbook_update
+          - *send_telegram_message
+
+          - alias: "Call backup service"
+            action: hassio.backup_full
+            data:
+              compressed: true
+            continue_on_error: true
+
+          - variables:
+              log_message: >
+                Backup triggered
+
+                Waiting {{ input_backup_timeout | int(60) }} minutes
+          - *logbook_update
+          - *send_telegram_message
+
+          - alias: "Wait for the backup"  # There's no sensor for when the backup finishes
             delay:
               minutes: "{{ input_backup_timeout | int(60) }}"
-          - alias: If Telegram notifications are enabled send telegram message to specified target.
-            if: '{{ input_notification_telegram_enable }}'
-            then:
-              - data:
-                  message: "Backup Waittime finished. Continuing..."
-                  target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                alias: Telegram Houseofnerds Message to group chat
-                action: telegram_bot.send_message
-    else: []
 
-  ########## Update add-ons (Standard) ##########
-  - variables:
-      updates_list: *refresh_updates_list
-  - *logbook-variables
-  - alias: "Update - Standard"
-    continue_on_error: true
-    repeat:
-      while:
-        - "{{ input_general_update_mode in ['patches', 'major_and_minor', 'all'] }}"
-        - condition: state
-          entity_id: !input schedule_entity
-          state: "on"
-        - condition: template
-          value_template: >
-            {{ ( states.update
-              | selectattr('state','eq','on')
-              | selectattr('entity_id', 'in', pending_updates_list)
-              | rejectattr('entity_id', 'in', core_update_entity)
-              | rejectattr('entity_id', 'in', os_update_entity)
-              | rejectattr('entity_id', 'in', firmware_update_entities)
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='entity_id')
-              | list | count | int(0) ) > 0
-            }}
-      sequence:
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - Standard - Logbook - Starting"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Starting sequence of standard updates..."
-        - variables:
-            pending_update_list: >
-              {{ states.update
-                | selectattr('state','eq','on')
-                | selectattr('entity_id', 'in', pending_updates_list)
-                | rejectattr('entity_id', 'in', core_update_entity)
-                | rejectattr('entity_id', 'in', os_update_entity)
-                | rejectattr('entity_id', 'in', firmware_update_entities)
-                | rejectattr('entity_id', 'in', input_update_exclusions)
-                | map(attribute='entity_id')
-                | list
+          - variables:
+              log_message: >
+                Backup Wait time finished.
+
+                Continuing...
+          - *logbook_update
+          - *send_telegram_message
+        else: []
+
+  - alias: Update add-ons
+    sequence:
+      - *recalc_update_list
+      - variables:
+          pending_updates_list: *refresh_updates_list
+          log_message: "Update add-ons"
+      - *logbook_update
+      - alias: "Update - Standard"
+        continue_on_error: true
+        repeat:
+          while:
+            - "{{ input_general_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - condition: state
+              entity_id: !input schedule_entity
+              state: "on"
+            - condition: template
+              value_template: >
+                {{ ( states.update
+                  | selectattr('state','eq','on')
+                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | rejectattr('entity_id', 'in', core_update_entity)
+                  | rejectattr('entity_id', 'in', os_update_entity)
+                  | rejectattr('entity_id', 'in', firmware_update_entities)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | map(attribute='entity_id')
+                  | list | count | int(0) ) > 0
                 }}
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - Standard - Logbook - Updating"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-            - alias: If Telegram notifications are enabled send telegram message to specified target.
-              if:
-                - condition: template
-                  value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                  alias: Check if telegram notifications are enabled
-              then:
-                - data:
-                    message: |
-                      Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
-                      - ')  }} ...
-                    target: "{{ input_notification_telegram_target_id }}"
-                    disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                  alias: Telegram Houseofnerds Message to group chat
-                  action: telegram_bot.send_message
-        - alias: "Update - Standard - Install"
-          continue_on_error: true
-          action: update.install
-          data: {}
-          target:
-            entity_id: '{{ pending_update_list[0] }}'
-        - alias: "Update - Standard - Wait"
-          continue_on_error: true
-          wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
-          continue_on_timeout: true
-          timeout: '3600'
+          sequence:
+            - variables:
+                log_message: "Starting sequence of standard updates..."
+            - *logbook_update
+            - variables:
+                pending_update_list: >
+                  {{ states.update
+                    | selectattr('state','eq','on')
+                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | rejectattr('entity_id', 'in', core_update_entity)
+                    | rejectattr('entity_id', 'in', os_update_entity)
+                    | rejectattr('entity_id', 'in', firmware_update_entities)
+                    | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | map(attribute='entity_id')
+                    | list
+                    }}
+                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}}..."
+            - *logbook_update
+            - *send_telegram_message
 
-  ########## Update core items ##########
-  - variables:
-      updates_list: *refresh_updates_list
-  - *logbook-variables
-  - alias: "Update - Core"
-    continue_on_error: true
-    repeat:
-      while:
-        - "{{ input_core_os_update_mode in ['patches', 'major_and_minor', 'all'] }}"
-        - condition: state
-          entity_id: !input schedule_entity
-          state: "on"
-        - condition: template
-          value_template: >
-            {{ ( states.update
-              | selectattr('state','eq','on')
-              | selectattr('entity_id', 'in', pending_updates_list)
-              | selectattr('entity_id', 'in', core_update_entity)
-              | rejectattr('entity_id', 'in', os_update_entity)
-              | rejectattr('entity_id', 'in', firmware_update_entities)
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='entity_id')
-              | list | count | int(0) ) > 0
-            }}
-      sequence:
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - Core - Logbook - Starting"
+            - &update_install
+              alias: "Update - Install"
               continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Starting sequence of core items updates..."
-            - alias: If Telegram notifications are enabled send telegram message to specified target.
-              if:
-                - condition: template
-                  value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                  alias: Check if telegram notifications are enabled
-              then:
-                - data:
-                    message: "Starting sequence of core items updates... "
-                    target: "{{ input_notification_telegram_target_id }}"
-                    disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                  alias: Telegram Houseofnerds Message to group chat
-                  action: telegram_bot.send_message
-        - variables:
-            pending_update_list: >
-              {{ states.update
-                | selectattr('state','eq','on')
-                | selectattr('entity_id', 'in', pending_updates_list)
-                | selectattr('entity_id', 'in', core_update_entity)
-                | rejectattr('entity_id', 'in', os_update_entity)
-                | rejectattr('entity_id', 'in', firmware_update_entities)
-                | rejectattr('entity_id', 'in', input_update_exclusions)
-                | map(attribute='entity_id')
-                | list
+              action: update.install
+              data: {}
+              target:
+                entity_id: '{{ pending_update_list[0] }}'
+
+            - &update_wait
+              alias: "Update - Wait"
+              continue_on_error: true
+              wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
+              continue_on_timeout: true
+              timeout: '{{ input_update_timeout }}'
+
+  - alias: Update core
+    sequence:
+      - *recalc_update_list
+      - variables:
+          pending_updates_list: *refresh_updates_list
+          log_message: "Update Core"
+      - *logbook_update
+      - alias: "Update - Core"
+        continue_on_error: true
+        repeat:
+          while:
+            - "{{ input_core_os_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - condition: state
+              entity_id: !input schedule_entity
+              state: "on"
+            - condition: template
+              value_template: >
+                {{ ( states.update
+                  | selectattr('state','eq','on')
+                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | selectattr('entity_id', 'in', core_update_entity)
+                  | rejectattr('entity_id', 'in', os_update_entity)
+                  | rejectattr('entity_id', 'in', firmware_update_entities)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | map(attribute='entity_id')
+                  | list | count | int(0) ) > 0
                 }}
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - Core - Logbook - Updating"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-            - alias: If Telegram notifications are enabled send telegram message to specified target.
-              if:
-                - condition: template
-                  value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                  alias: Check if telegram notifications are enabled
-              then:
-                - data:
-                    message: |
-                      Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
-                      - ')  }} ...
-                    target: "{{ input_notification_telegram_target_id }}"
-                    disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                  alias: Telegram Houseofnerds Message to group chat
-                  action: telegram_bot.send_message
-        - alias: "Update - Core - Install"
-          continue_on_error: true
-          action: update.install
-          data: {}
-          target:
-            entity_id: '{{ pending_update_list[0] }}'
-        - alias: "Update - Core - Wait"
-          continue_on_error: true
-          wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
-          continue_on_timeout: true
-          timeout: '3600'
+          sequence:
+            - variables:
+                log_message: "Starting sequence of core items updates..."
+            - *logbook_update
+            - *send_telegram_message
 
-  ########## Update OS ##########
-  - variables:
-      updates_list: *refresh_updates_list
-  - *logbook-variables
-  - alias: "Update - OS"
-    continue_on_error: true
-    repeat:
-      while:
-        - "{{ input_core_os_update_mode in ['patches', 'major_and_minor', 'all'] }}"
-        - condition: state
-          entity_id: !input schedule_entity
-          state: "on"
-        - condition: template
-          value_template: >
-            {{ ( states.update
-              | selectattr('state','eq','on')
-              | selectattr('entity_id', 'in', pending_updates_list)
-              | rejectattr('entity_id', 'in', core_update_entity)
-              | selectattr('entity_id', 'in', os_update_entity)
-              | rejectattr('entity_id', 'in', firmware_update_entities)
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='entity_id')
-              | list | count | int(0) ) > 0
-            }}
-      sequence:
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - OS - Logbook - Starting"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Starting sequence of OS update..."
-            - alias: If Telegram notifications are enabled send telegram message to specified target.
-              if:
-                - condition: template
-                  value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                  alias: Check if telegram notifications are enabled
-              then:
-                - data:
-                    message: "Starting sequence of OS updates... "
-                    target: "{{ input_notification_telegram_target_id }}"
-                    disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                  alias: Telegram Houseofnerds Message to group chat
-                  action: telegram_bot.send_message
-        - variables:
-            pending_update_list: >
-              {{ states.update
-                | selectattr('state','eq','on')
-                | selectattr('entity_id', 'in', pending_updates_list)
-                | rejectattr('entity_id', 'in', core_update_entity)
-                | selectattr('entity_id', 'in', os_update_entity)
-                | rejectattr('entity_id', 'in', firmware_update_entities)
-                | rejectattr('entity_id', 'in', input_update_exclusions)
-                | map(attribute='entity_id')
-                | list
+            - variables:
+                pending_update_list: >
+                  {{ states.update
+                    | selectattr('state','eq','on')
+                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | selectattr('entity_id', 'in', core_update_entity)
+                    | rejectattr('entity_id', 'in', os_update_entity)
+                    | rejectattr('entity_id', 'in', firmware_update_entities)
+                    | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | map(attribute='entity_id')
+                    | list
+                  }}
+                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+            - *logbook_update
+            - *send_telegram_message
+
+            - *update_install
+            - *update_wait
+
+  - alias: Update OS
+    sequence:
+      - *recalc_update_list
+      - variables:
+          pending_updates_list: *refresh_updates_list
+          log_message: "Update OS"
+      - *logbook_update
+      - alias: "Update - OS"
+        continue_on_error: true
+        repeat:
+          while:
+            - "{{ input_core_os_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - condition: state
+              entity_id: !input schedule_entity
+              state: "on"
+            - condition: template
+              value_template: >
+                {{ ( states.update
+                  | selectattr('state','eq','on')
+                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | rejectattr('entity_id', 'in', core_update_entity)
+                  | selectattr('entity_id', 'in', os_update_entity)
+                  | rejectattr('entity_id', 'in', firmware_update_entities)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | map(attribute='entity_id')
+                  | list | count | int(0) ) > 0
                 }}
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - OS - Logbook - Updating"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-            - alias: If Telegram notifications are enabled send telegram message to specified target.
-              if:
-                - condition: template
-                  value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                  alias: Check if telegram notifications are enabled
-              then:
-                - data:
-                    message: |
-                      Updating {{ states.update | selectattr('entity_id', 'in', pending_update_list[0]) | map(attribute='name') | list | join(' 
-                      - ')  }} ...
-                    target: "{{ input_notification_telegram_target_id }}"
-                    disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                  alias: Telegram Houseofnerds Message to group chat
-                  action: telegram_bot.send_message
-        - alias: "Update - OS - Install"
-          continue_on_error: true
-          action: update.install
-          data: {}
-          target:
-            entity_id: '{{ pending_update_list[0] }}'
-        - alias: "Update - OS - Wait"
-          continue_on_error: true
-          wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
-          continue_on_timeout: true
-          timeout: '3600'
+          sequence:
+            - variables:
+                log_message: "Starting sequence of OS update"
+            - *logbook_update
+            - *send_telegram_message
 
-  ########## Devices firmware ##########
-  - variables:
-      updates_list: *refresh_updates_list
-  - alias: "Update - Devices firmware"
-    continue_on_error: true
-    repeat:
-      while:
-        - "{{ input_firmware_update_mode in ['patches', 'major_and_minor', 'all'] }}"
-        - condition: state
-          entity_id: !input schedule_entity
-          state: "on"
-        - condition: template
-          value_template: >
-            {{ ( states.update
-              | selectattr('state','eq','on')
-              | selectattr('entity_id', 'in', pending_updates_list)
-              | rejectattr('entity_id', 'in', core_update_entity)
-              | rejectattr('entity_id', 'in', os_update_entity)
-              | selectattr('entity_id', 'in', firmware_update_entities)
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='entity_id')
-              | list | count | int(0) ) > 0
-            }}
-      sequence:
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - Devices firmware - Logbook - Starting"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Starting sequence of Devices firmware update..."
-        - variables:
-            pending_update_list: >
-              {{ states.update
-                | selectattr('state','eq','on')
-                | selectattr('entity_id', 'in', pending_updates_list)
-                | rejectattr('entity_id', 'in', core_update_entity)
-                | rejectattr('entity_id', 'in', os_update_entity)
-                | selectattr('entity_id', 'in', firmware_update_entities)
-                | map(attribute='entity_id')
-                | list
+            - variables:
+                pending_update_list: >
+                  {{ states.update
+                    | selectattr('state','eq','on')
+                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | rejectattr('entity_id', 'in', core_update_entity)
+                    | selectattr('entity_id', 'in', os_update_entity)
+                    | rejectattr('entity_id', 'in', firmware_update_entities)
+                    | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | map(attribute='entity_id')
+                    | list
+                  }}
+                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+            - *logbook_update
+            - *send_telegram_message
+
+            - *update_install
+            - *update_wait
+
+  - alias: Devices firmware
+    sequence:
+      - *recalc_update_list
+      - variables:
+          pending_updates_list: *refresh_updates_list
+          log_message: "Device's firmware"
+      - *logbook_update
+
+      - alias: "Update - Devices firmware"
+        continue_on_error: true
+        repeat:
+          while:
+            - "{{ input_firmware_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - condition: state
+              entity_id: !input schedule_entity
+              state: "on"
+            - condition: template
+              value_template: >
+                {{ ( states.update
+                  | selectattr('state','eq','on')
+                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | rejectattr('entity_id', 'in', core_update_entity)
+                  | rejectattr('entity_id', 'in', os_update_entity)
+                  | selectattr('entity_id', 'in', firmware_update_entities)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | map(attribute='entity_id')
+                  | list | count | int(0) ) > 0
                 }}
-        - if: "{{ input_verbose_logging_bool }}"
-          then:
-            - alias: "Update - Devices firmware - Logbook - Updating"
-              continue_on_error: true
-              action: logbook.log
-              data:
-                name: Auto-update
-                entity_id: '{{ this.entity_id }}'
-                message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-        - alias: "Update - Devices firmware - Install"
-          continue_on_error: true
-          action: update.install
-          data: {}
-          target:
-            entity_id: '{{ pending_update_list[0] }}'
-        - alias: "Update - Devices firmware - Wait"
-          continue_on_error: true
-          wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
-          continue_on_timeout: true
-          timeout: '3600'
+          sequence:
+            - variables:
+                log_message: "Starting sequence of Devices firmware update"
+            - *logbook_update
+            - *send_telegram_message
 
-  ########## Update all remaining items ########## => this chaches up if some update item was left behind
-  - alias: "Update - Remaining"
+            - variables:
+                pending_update_list: >
+                  {{ states.update
+                    | selectattr('state','eq','on')
+                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | rejectattr('entity_id', 'in', core_update_entity)
+                    | rejectattr('entity_id', 'in', os_update_entity)
+                    | selectattr('entity_id', 'in', firmware_update_entities)
+                    | map(attribute='entity_id')
+                    | list
+                  }}
+                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+            - *logbook_update
+            - *send_telegram_message
+
+            - *update_install
+            - *update_wait
+
+  - alias: Update - Remaining  # Update all remaining items => this chaches up if some update item was left behind
     continue_on_error: true
     if:
       - condition: state
         entity_id: !input schedule_entity
         state: "on"
     then:
-      - alias: "Update - Remaining - Logbook - Updating"
-        continue_on_error: true
-        service: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: Updating all remaining items (if any).
-      - alias: If Telegram notifications are enabled send telegram message to specified target.
-        if:
-          - condition: template
-            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-            alias: Check if telegram notifications are enabled
-        then:
-          - data:
-              message: "Updating all remaining items (if any)."
-              target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-            alias: Telegram Houseofnerds Message to group chat
-            action: telegram_bot.send_message
+      - *recalc_update_list
+      - variables:
+          pending_updates_list: *refresh_updates_list
+          log_message: "Updating all remaining items (if any)"
+      - *logbook_update
+      - *send_telegram_message
+
       - alias: "Update - Remaining - Install"
         continue_on_error: true
         service: update.install
@@ -1158,7 +1123,7 @@ action:
           entity_id: >-
             {{ states.update
             | selectattr('state','eq','on')
-            | selectattr('entity_id', 'in', updates_list)
+            | selectattr('entity_id', 'in', pending_updates_list)
             | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
             | list
@@ -1166,211 +1131,143 @@ action:
       - alias: "Update - Remaining - Wait"
         continue_on_error: true
         wait_template: >-
-          {{ (states.update | selectattr('state','eq','on') | selectattr('entity_id', 'in', updates_list) | rejectattr('entity_id', 'in', input_update_exclusions) | list | count | int(0)) < 1 }}
+          {{
+            (
+              states.update
+              | selectattr('state','eq','on')
+              | selectattr('entity_id', 'in', pending_updates_list)
+              | rejectattr('entity_id', 'in', input_update_exclusions)
+              | list
+              | count
+              | int(0)
+            ) < 1
+          }}
         continue_on_timeout: true
-        timeout: '3600'
+        timeout: '{{ input_update_timeout }}'
 
-  ########## Finishing ##########
-  - variables:
-      updates_list: *refresh_updates_list
-  - *logbook-variables
-  - if: "{{ input_verbose_logging_bool }}"
-    then:
-      - alias: "Logbook - Updating"
-        continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: Finishing update process.
-      - alias: If Telegram notifications are enabled send telegram message to specified target.
-        if:
-          - condition: template
-            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-            alias: Check if telegram notifications are enabled
-        then:
-          - data:
-              message: "Finishing update process."
-              target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-            alias: Telegram Houseofnerds Message to group chat
-            action: telegram_bot.send_message
-      - alias: "Logbook - Remaining updates"
-        continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: |
+  - alias: Finishing
+    sequence:
+      - *recalc_update_list
+      - variables:
+          pending_updates_list: *refresh_updates_list
+          log_message: "Finishing update process"
+      - *logbook_update
+      - *send_telegram_message
+
+      - variables:
+          log_message: >
             Remaining updates:
-            {{ '- ' + states.update 
+            {{ '- ' + states.update
               | selectattr('state','eq','on')
               | selectattr('entity_id', 'in', pending_updates_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | map(attribute='name') | list | join('
 
-        
-            - ') if 
-              states.update 
+            - ') if
+              states.update
               | selectattr('state','eq','on')
-              | selectattr('entity_id', 'in', updates_list)
+              | selectattr('entity_id', 'in', pending_updates_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | map(attribute='name') | list | count | int(0) > 0
               else 'None remaining'
             }}
-      - alias: If Telegram notifications are enabled send telegram message to specified target.
-        if:
-          - condition: template
-            value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-            alias: Check if telegram notifications are enabled
-        then:
-          - data:
-              message: |
-                Remaining updates:
-                {{ '- ' + states.update
-                  | selectattr('state','eq','on')
-                  | selectattr('entity_id', 'in', updates_list)
-                  | rejectattr('entity_id', 'in', input_update_exclusions)
-                  | map(attribute='name') | list | join('
+      - *logbook_update
+      - *send_telegram_message
 
-                  - ') if
-                  states.update 
-                  | selectattr('state','eq','on')
-                  | selectattr('entity_id', 'in', updates_list)
-                  | rejectattr('entity_id', 'in', input_update_exclusions)
-                  | map(attribute='name') | list | count | int(0) > 0
-                  else 'None remaining'
-                }}
-              target: "{{ input_notification_telegram_target_id }}"
-              disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-            alias: Telegram Houseofnerds Message to group chat
-            action: telegram_bot.send_message
-
-  ########## Restart Home Assistant ##########
-  - if: "{{ input_verbose_logging_bool }}"
-    then:
-      - alias: "Restart - Logbook"
-        continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: >
+  - alias: Restart  # Restart Home Assistant
+    sequence:
+      - variables:
+          input_restart_type: !input restart_type
+          log_message: >
             {{ states.update
               | selectattr('attributes.release_summary', 'defined')
               | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
               | map(attribute='entity_id')
               | list
               | count
-              | int(0) }} item(s) pending a restart:
+              | int(0)
+            }} item(s) pending a restart:
             - {{ states.update
-              | selectattr('attributes.release_summary', 'defined')
-              | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-              | map(attribute='entity_id')
-              | list
-              | join('
-            - ') }}
-  - alias: "Restart"
-    continue_on_error: true
-    if:
-      - >-
-        {{ input_restart_type != "no-restart" and (
-          (
-            states.update
-            | selectattr('attributes.release_summary', 'defined')
-            | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-            | map(attribute='entity_id')
-            | list | count | int(0)
-          ) > 0)
-        }}
-    then:
-      - alias: "Restart - Check config"
+                | selectattr('attributes.release_summary', 'defined')
+                | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
+                | map(attribute='entity_id')
+                | list
+                | join('
+                - ')
+              }}
+      - *logbook_update
+      - *send_telegram_message
+
+      - alias: "Restart"
         continue_on_error: true
-        action: homeassistant.check_config
-      - if:
-          - "{{ states.persistent_notification.invalid_config.state | default('unavailable') == 'notifying' or states.persistent_notification.homeassistant_check_config.state | default('unavailable') == 'notifying' }}"
+        if:
+          - >-
+            {{ input_restart_type != "no-restart" and
+              (
+                states.update
+                | selectattr('attributes.release_summary', 'defined')
+                | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
+                | map(attribute='entity_id')
+                | list | count | int(0)
+              ) > 0
+            }}
         then:
-          - if: "{{ input_verbose_logging_bool }}"
-            then:
-              - alias: "Logbook: Running pre-restart actions"
-                continue_on_error: true
-                action: logbook.log
-                data:
-                  name: Auto-update
-                  entity_id: '{{ this.entity_id }}'
-                  message: Running pre-restart actions...
-          - alias: "Run pre-restart actions"
+          - alias: "Restart - Check config"
             continue_on_error: true
-            choose:
-              - conditions:
-                  - '{{ true }}'
-                sequence: !input actions_pre_restart
-            default: []
-          - if: "{{ input_verbose_logging_bool }}"
+            action: homeassistant.check_config
+          - if: >
+              {{
+                states.persistent_notification.invalid_config.state | default('unavailable') == 'notifying' or
+                states.persistent_notification.homeassistant_check_config.state | default('unavailable') == 'notifying'
+              }}
             then:
-              - alias: "Restart - Logbook - Skipping restart"
+              - variables:
+                  log_message: "Running pre-restart actions..."
+              - *logbook_update
+              - *send_telegram_message
+
+              - alias: "Run pre-restart actions"
                 continue_on_error: true
-                action: logbook.log
-                data:
-                  name: Auto-update
-                  entity_id: '{{ this.entity_id }}'
-                  message: >
+                sequence: !input actions_pre_restart
+              - variables:
+                  log_message: >
                     Skipping restart process due to notifications of invalid configurations:
                     states.persistent_notification.invalid_config.state = {{ states.persistent_notification.invalid_config.state | default('unavailable') }},
                     states.persistent_notification.homeassistant_check_config.state = {{ states.persistent_notification.homeassistant_check_config.state | default('unavailable') }}
-        else:
-          - alias: If Telegram notifications are enabled send telegram message to specified target.
-            if:
-              - condition: template
-                value_template: "{{ true if input_notification_telegram_enable is true else false }}"
-                alias: Check if telegram notifications are enabled
-            then:
-              - data:
-                  message: "Restart was asked by admin. Restarting Homeassistant... "
-                  target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: "{{ true if input_notification_telegram_disable_notification is true else false }}"
-                alias: Telegram Houseofnerds Message to group chat
-                action: telegram_bot.send_message
-          - alias: "Wait 15 seconds to deliver the telegram message."
-            delay: 
-              seconds: 15
-          - alias: "Restart - Logbook - Restarting"
-            continue_on_error: true
-            action: logbook.log
-            data:
-              name: Auto-update
-              entity_id: '{{ this.entity_id }}'
-              message: 'Restarting Home Assistant {{ input_restart_type }}...'
-          - alias: "Restart - Call reboot service"
-            continue_on_error: true
-            action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
+              - *logbook_update
+              - *send_telegram_message
+            else:
+              - variables:
+                  log_message: >
+                    Restart was asked by admin.
 
-    ########## Post-update actions ##########
-  - if: "{{ input_verbose_logging_bool }}"
-    then:
-      - alias: "Logbook - Post-actions"
+                    Restarting Home Assistant ({{ input_restart_type }})
+              - *logbook_update
+              - *send_telegram_message
+
+              - alias: "Wait 15 seconds to deliver the telegram message."
+                delay:
+                  seconds: 15
+
+              - alias: "Restart - Call reboot service"
+                continue_on_error: true
+                action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
+
+  - alias: Post-update actions
+    sequence:
+      - variables:
+          log_message: "Running post-update actions"
+      - *logbook_update
+      - *send_telegram_message
+
+      - alias: "Run post-update actions"
         continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: Running post-update actions...
-
-  - alias: "Run post-update actions"
-    continue_on_error: true
-    choose:
-      - conditions:
-          - '{{ true }}'
         sequence: !input actions_pos_update
-    default: []
 
-    ########## Done! ##########
-  - if: "{{ input_verbose_logging_bool }}"
-    then:
-      - alias: "Logbook - Done"
-        continue_on_error: true
-        action: logbook.log
-        data:
-          name: Auto-update
-          entity_id: '{{ this.entity_id }}'
-          message: Done!
+  - alias: Done  # All done!
+    sequence:
+      - variables:
+          log_message: "Done!"
+      - *logbook_update
+      - *send_telegram_message
+...
