@@ -393,11 +393,13 @@ blueprint:
                   value: "core"
                 - label: "Restart Home Assistant host"
                   value: "host"
+
         verbose_logging_bool:
           name: Log addon progress with verbosity to the logbook? (optional)
           default: false
           selector:
             boolean: {}
+
         update_process_started_entity:
           name: '"Update Process Started" Toggle Entity (optional)'
           description: >
@@ -413,6 +415,17 @@ blueprint:
             entity:
               multiple: false
               domain: input_boolean
+
+        update_timeout:
+          name: Update Timeout
+          description: Maximum time to wait for each update to complete
+          default: 3600
+          selector:
+            number:
+              min: 300
+              max: 7200
+              unit_of_measurement: seconds
+              mode: box
 
 mode: single
 max_exceeded: warning
@@ -554,6 +567,7 @@ variables:
   input_general_update_mode: !input general_update_mode
   updates_list: *refresh_updates_list
   pending_updates_list: '{{ updates_list }}'
+  input_update_timeout: !input update_timeout
 
 action:
   - alias: Preparation  # Inform logbook and telegram which update automation is running
@@ -859,7 +873,7 @@ action:
               continue_on_error: true
               wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
               continue_on_timeout: true
-              timeout: '3600'
+              timeout: '{{ input_update_timeout }}'
 
   - alias: Update core
     sequence:
@@ -1055,7 +1069,7 @@ action:
             ) < 1
           }}
         continue_on_timeout: true
-        timeout: '3600'
+        timeout: '{{ input_update_timeout }}'
 
   - alias: Finishing
     sequence:
