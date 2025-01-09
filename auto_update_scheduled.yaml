@@ -595,8 +595,45 @@ variables:
   input_update_timeout: !input update_timeout
 
 action:
+  - &recalc_update_list
+    variables:
+      core_update_entity: >
+            {% for u in integration_entities('hassio') | select('search', '^update[.]')
+                    if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
+                {{ u }}
+            {% endfor %}
+      os_update_entity: >
+            {% for u in integration_entities('hassio') | select('search', '^update[.]')
+                    if (device_attr(u, 'identifiers') | first)[1] == 'OS' %}
+                {{ u }}
+            {% endfor %}
+      supervisor_update_entity: >
+            {% for u in integration_entities('hassio') | select('search', '^update[.]')
+                    if (device_attr(u, 'identifiers') | first)[1] == 'supervisor' %}
+                {{ u }}
+            {% endfor %}
+      firmware_update_entities: >
+            {{ states.update
+              | default([])
+              | selectattr('attributes.device_class', 'defined')
+              | selectattr('attributes.device_class', 'eq', 'firmware')
+              | map(attribute='entity_id')
+              | list
+            }}
+      general_update_entities: >
+        {{ states.update
+          | default([])
+          | rejectattr('entity_id', 'in', core_update_entity)
+          | rejectattr('entity_id', 'in', os_update_entity)
+          | rejectattr('entity_id', 'in', supervisor_update_entity)
+          | rejectattr('entity_id', 'in', firmware_update_entities)
+          | map(attribute='entity_id')
+          | list
+        }}
+
   - alias: Preparation  # Inform logbook and telegram which update automation is running
     sequence:
+      - *recalc_update_list
       - variables:
           log_message: '{{ this.entity_id }} is starting now.'
       - &send_telegram_message
@@ -626,6 +663,7 @@ action:
 
   - alias: Check for skipping core/OS
     sequence:
+      - *recalc_update_list
       - alias: "Re-check conditions after restart"
         continue_on_error: true
         if:
@@ -711,6 +749,7 @@ action:
 
   - alias: Starting
     sequence:
+      - *recalc_update_list
       - variables:
           log_message: >-
             Variables:
@@ -749,6 +788,7 @@ action:
 
   - alias: Pre-update actions
     sequence:
+      - *recalc_update_list
       - variables:
           log_message: "Running pre-update actions..."
       - *logbook_update
@@ -759,6 +799,7 @@ action:
 
   - alias: Backup
     sequence:
+      - *recalc_update_list
       - variables:
           input_backup_bool: !input backup_bool
           input_backup_timeout_minutes: !input backup_timeout
@@ -844,6 +885,7 @@ action:
 
   - alias: Update add-ons
     sequence:
+      - *recalc_update_list
       - variables:
           pending_updates_list: *refresh_updates_list
           log_message: "Update add-ons"
@@ -905,6 +947,7 @@ action:
 
   - alias: Update core
     sequence:
+      - *recalc_update_list
       - variables:
           pending_updates_list: *refresh_updates_list
           log_message: "Update Core"
@@ -956,6 +999,7 @@ action:
 
   - alias: Update OS
     sequence:
+      - *recalc_update_list
       - variables:
           pending_updates_list: *refresh_updates_list
           log_message: "Update OS"
@@ -1007,6 +1051,7 @@ action:
 
   - alias: Devices firmware
     sequence:
+      - *recalc_update_list
       - variables:
           pending_updates_list: *refresh_updates_list
           log_message: "Device's firmware"
@@ -1063,6 +1108,7 @@ action:
         entity_id: !input schedule_entity
         state: "on"
     then:
+      - *recalc_update_list
       - variables:
           pending_updates_list: *refresh_updates_list
           log_message: "Updating all remaining items (if any)"
@@ -1101,6 +1147,7 @@ action:
 
   - alias: Finishing
     sequence:
+      - *recalc_update_list
       - variables:
           pending_updates_list: *refresh_updates_list
           log_message: "Finishing update process"
