@@ -457,27 +457,13 @@ trigger_variables:
   input_pause_entities: !input pause_entities
   input_update_exclusions: !input update_exclusions
   input_update_out_of_schedule: !input update_out_of_schedule
-  updates_available: >
-    {% set updates_available_obj =
-        states.update
-        | default([])
-        | selectattr("state", "eq", "on")
-        | rejectattr("entity_id", "in", input_update_exclusions)
-    %}
-    {{
-      updates_available_obj | map(attributes="entity_id") | list
-      if (updates_available_obj | list | count | int(0) > 0)
-      else []
-    }}
   schedule_monthday_earliest: !input schedule_monthday_earliest
   schedule_monthday_last: !input schedule_monthday_last
   input_schedule_monthday_earliest: '{{ schedule_monthday_earliest | int(0) }}'
   input_schedule_monthday_last: '{{ schedule_monthday_last | int(0) }}'
   input_update_inclusion_entity_list: !input update_inclusion_entity_list
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
-  input_notification_telegram_enable: !input notification_telegram_enable
-  input_notification_telegram_target_id: !input notification_telegram_target_id
-  input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
+  input_update_process_started_entity: !input update_process_started_entity
 
 trigger:
   - id: HA Schedule based
@@ -515,16 +501,25 @@ trigger:
     entity_id: !input pause_entities
 
 condition:
-  # this cant be a condition for the whole automation because we have to "run" the automation to disable the input_boolean helper at the end of one complete update process
-  # - condition: template
-  #   value_template: >-
-  #     {{
-  #       states.update
-  #       | default([])
-  #       | selectattr("state", "eq", "on")
-  #       | rejectattr("entity_id", "in", input_update_exclusions)
-  #       | list | count | int(0) > 0
-  #     }}
+  - condition: or
+    conditions:
+      - condition: template
+        value_template: >-
+          {{
+            states.update
+            | default([])
+            | selectattr("state", "eq", "on")
+            | rejectattr("entity_id", "in", input_update_exclusions)
+            | list | count | int(0) > 0
+          }}
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: "HA Start"
+          - '{{ input_update_process_started_entity | default([]) | count == 1 }}'
+          - condition: state
+            entity_id: !input update_process_started_entity
+            state: "on"
 
   - condition: template
     value_template: >
@@ -547,72 +542,89 @@ variables:
   input_general_update_mode: !input general_update_mode
   input_update_inclusion_mode: !input update_inclusion_mode
   input_update_timeout: !input update_timeout
+  input_notification_telegram_enable: !input notification_telegram_enable
+  input_notification_telegram_target_id: !input notification_telegram_target_id
+  input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
+  core_update_entity: >
+    {% for u in integration_entities('hassio') | select('search', '^update[.]')
+      if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
+        {{ u }}
+    {% endfor %}
+  os_update_entity: >
+    {% for u in integration_entities('hassio') | select('search', '^update[.]')
+      if (device_attr(u, 'identifiers') | first)[1] == 'OS' %}
+        {{ u }}
+    {% endfor %}
+  supervisor_update_entity: >
+    {% for u in integration_entities('hassio') | select('search', '^update[.]')
+      if (device_attr(u, 'identifiers') | first)[1] == 'supervisor' %}
+        {{ u }}
+    {% endfor %}
+  is_continuing_from_a_restart: >
+    {{
+      input_update_process_started_entity | default([]) | count == 1 and
+      is_state(input_update_process_started_entity | first, "on")
+    }}
+  friendly_name: |
+    {% set friendly_name_tmp = state_attr(this.entity_id, "friendly_name") | default("") %}
+    {{
+      friendly_name_tmp
+      if friendly_name_tmp is string and friendly_name_tmp | length > 0
+      else "Auto-update"
+    }}
 
 action:
   - &recalc_update_list
     variables:
-      core_update_entity: >
-            {% for u in integration_entities('hassio') | select('search', '^update[.]')
-                    if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
-                {{ u }}
-            {% endfor %}
-      os_update_entity: >
-            {% for u in integration_entities('hassio') | select('search', '^update[.]')
-                    if (device_attr(u, 'identifiers') | first)[1] == 'OS' %}
-                {{ u }}
-            {% endfor %}
-      supervisor_update_entity: >
-            {% for u in integration_entities('hassio') | select('search', '^update[.]')
-                    if (device_attr(u, 'identifiers') | first)[1] == 'supervisor' %}
-                {{ u }}
-            {% endfor %}
       firmware_update_entities: >
-            {{ states.update
-              | default([])
-              | selectattr('attributes.device_class', 'defined')
-              | selectattr('attributes.device_class', 'eq', 'firmware')
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='entity_id')
-              | list
-            }}
-      general_update_entities: >
-        {{ states.update
+        {{
+          states.update
           | default([])
-          | rejectattr('entity_id', 'in', core_update_entity)
-          | rejectattr('entity_id', 'in', os_update_entity)
-          | rejectattr('entity_id', 'in', supervisor_update_entity)
-          | rejectattr('entity_id', 'in', firmware_update_entities)
+          | selectattr("state", "eq", "on")
+          | selectattr('attributes.device_class', 'defined')
+          | selectattr('attributes.device_class', 'eq', 'firmware')
           | rejectattr('entity_id', 'in', input_update_exclusions)
-        }}
-      general_update_entities_list: >
-        {{ general_update_entities
-          | default([])
           | map(attribute='entity_id')
           | list
         }}
-      pending_updates_list: >
+      general_update_entities: >
         {% if input_update_inclusion_mode == "all" %}
           {{
-            general_update_entities | default([])
+            states.update
+            | default([])
             | selectattr('state', 'eq', 'on')
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
             | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
             | list
           }}
         {% elif input_update_inclusion_mode == "specified" %}
           {{
-            input_update_inclusion_entity_list | default([])
+            states.update
+            | default([])
             | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', general_update_entities_list)
+            | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
             | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
             | list
           }}
         {% elif input_update_inclusion_mode == "specified-single" %}
           {{
-            input_update_inclusion_entity_list | default([])
+            states.update
+            | default([])
             | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', general_update_entities_list)
+            | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
             | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
             | list
@@ -620,36 +632,58 @@ action:
           }}
         {% elif input_update_inclusion_mode == "searchstring" %}
           {{
-            states.update | default([])
+            states.update
+            | default([])
             | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', general_update_entities_list)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
             | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
-            | sort
             | list
           }}
         {% elif input_update_inclusion_mode == "searchfilter-single" %}
           {{
-            states.update | default([])
+            states.update
+            | default([])
             | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', general_update_entities_list)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
             | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
-            | sort
+            | list
             | first
           }}
         {% endif %}
+      pending_updates_list: |
+        {{
+          states.update
+          | default([])
+          | selectattr("state", "eq", "on")
+          | selectattr('entity_id', 'in', [ firmware_update_entities,
+                                            general_update_entities,
+                                            core_update_entity,
+                                            os_update_entity,
+                                            supervisor_update_entity])
+          | rejectattr('entity_id', 'in', input_update_exclusions)
+          | map(attribute='entity_id')
+          | list
+        }}
+      pending_update_count: '{{ pending_updates_list | list | count | int(0) }}'
 
   - variables:
       updates_list: '{{ pending_updates_list }}'
-      is_there_anything_to_update: '{{ updates_list | list | count | int(0) > 0 }}'
+      is_there_anything_to_update: '{{ pending_update_count > 0 }}'
 
-  - if: '{{ not is_there_anything_to_update }}'
-    then:
+  - alias: Preparation  # Inform logbook and telegram which update automation is running
+    sequence:
       - variables:
-          log_message: "There's nothing to update"
+          log_message: '{{ friendly_name }} is {{ "re" if is_continuing_from_a_restart else ""}}starting'
       - &logbook_update
         if: "{{ input_verbose_logging_bool }}"
         then:
@@ -671,146 +705,42 @@ action:
           - alias: Telegram bot - Send message
             action: telegram_bot.send_message
             data:
-              message: '{{ log_message }}'
+              title: '{{ friendly_name }}'
               target: "{{ input_notification_telegram_target_id }}"
               disable_notification: '{{ input_notification_telegram_disable_notification }}'
+              message: '{{ log_message }}'
 
-  - alias: Preparation  # Inform logbook and telegram which update automation is running
+  - alias: Report list of updates
     if: '{{ is_there_anything_to_update }}'
     then:
-      - *recalc_update_list
-      - variables:
-          log_message: '{{ this.entity_id }} is starting now.'
-      - *logbook_update
-      - *send_telegram_message
-
-  - alias: Check for skipping core/OS
-    if: '{{ is_there_anything_to_update }}'
-    then:
-      - *recalc_update_list
-      - alias: "Re-check conditions after restart"
-        continue_on_error: true
-        if:
-          - >
-            {{
-              (
-                states.update
-                | selectattr('state', 'eq', 'on')
-                | selectattr('entity_id', 'in', pending_updates_list)
-                | rejectattr('entity_id', 'in', input_update_exclusions)
-                | list
-                | count
-                | int(0)
-              ) < 1
-            }}
-          - condition: and
-            conditions:
-              - condition: trigger
-                id: "HA Start"
-              - condition: state
-                entity_id: !input update_process_started_entity
-                state: "on"
-        then:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: "{{ input_update_process_started_entity }}"
-          - alias: If Telegram notifications are enabled send telegram message to specified target.
-            if:
-              - condition: template
-                value_template: '{{ input_notification_telegram_enable }}'
-                alias: Check if telegram notifications are enabled
-            then:
-              - data:
-                  message: "We dont have any updates to work on. Exiting..."
-                  target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
-                alias: Telegram Houseofnerds Message to group chat
-                action: telegram_bot.send_message
-          - stop: Nothing to update
-        else: []
-      - alias: "check conditions on first run"
-        continue_on_error: true
-        if:
-          - >
-            {{
-              (
-                states.update
-                | selectattr('state', 'eq', 'on')
-                | selectattr('entity_id', 'in', pending_updates_list)
-                | rejectattr('entity_id', 'in', input_update_exclusions)
-                | list
-                | count
-                | int(0)
-              ) < 1
-            }}
-          - condition: and
-            conditions:
-              - condition: not
-                conditions:
-                  - id: "HA Start"
-                    condition: trigger
-              - condition: state
-                entity_id: !input update_process_started_entity
-                state: "off"
-        then:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: "{{ input_update_process_started_entity }}"
-          - alias: If Telegram notifications are enabled send telegram message to specified target.
-            if:
-              - condition: template
-                value_template: '{{ input_notification_telegram_enable }}'
-                alias: Check if telegram notifications are enabled
-            then:
-              - data:
-                  message: "We seem to have installed all needed Updates. Disabling the 'Update Process Started' entity and stopping update process."
-                  target: "{{ input_notification_telegram_target_id }}"
-                  disable_notification: '{{ input_notification_telegram_disable_notification }}'
-                alias: Telegram Houseofnerds Message to group chat
-                action: telegram_bot.send_message
-          - stop: Nothing to update
-        else: []
-
-  - alias: Starting
-    if: '{{ is_there_anything_to_update }}'
-    then:
-      - *recalc_update_list
-      - variables:
-          log_message: >-
-            Variables:
-              input_verbose_logging_bool: {{ input_verbose_logging_bool }},
-              input_schedule_monthday_earliest: {{ input_schedule_monthday_earliest }},
-              input_schedule_monthday_last: {{ input_schedule_monthday_last }},
-              input_update_exclusions: {{ input_update_exclusions }},
-              input_core_os_update_mode: {{ input_core_os_update_mode }},
-              input_firmware_update_mode: {{ input_firmware_update_mode }},
-              input_general_update_mode: {{ input_general_update_mode }},
-              core_update_entity: {{ core_update_entity }},
-              os_update_entity: {{ os_update_entity }},
-              supervisor_update_entity: {{ supervisor_update_entity }},
-              firmware_update_entities: {{ firmware_update_entities }},
-              updates_list: {{ updates_list }}
-      - *logbook_update
-
-      - variables:
-          log_message: "A new update is available for Home Assistant."
-      - *logbook_update
-
       - variables:
           log_message: >
             List of updates:
               - {{ states.update
                 | selectattr('state', 'eq', 'on')
-                | selectattr('entity_id', 'in', pending_updates_list)
                 | rejectattr('entity_id', 'in', input_update_exclusions)
                 | map(attribute='name') | list | join('
 
               - ') }}
       - *logbook_update
       - *send_telegram_message
+    else:
+      - variables:
+          log_message: "There's nothing to update"
+      - *logbook_update
+      - *send_telegram_message
+
+  - alias: Set ON helper flag
+    if:
+      - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
+      - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
+    then:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: !input update_process_started_entity
 
   - alias: Pre-update actions
-    if: '{{ is_there_anything_to_update }}'
+    if: '{{ is_there_anything_to_update and not is_continuing_from_a_restart }}'
     then:
       - *recalc_update_list
       - variables:
@@ -822,7 +752,7 @@ action:
         sequence: !input actions_pre_update
 
   - alias: Backup
-    if: '{{ is_there_anything_to_update }}'
+    if: '{{ is_there_anything_to_update and not is_continuing_from_a_restart }}'
     then:
       - *recalc_update_list
       - variables:
@@ -908,14 +838,14 @@ action:
           - *send_telegram_message
         else: []
 
-  - alias: Update add-ons
+  - alias: Update generic
     if: '{{ is_there_anything_to_update }}'
     then:
       - *recalc_update_list
       - variables:
-          log_message: "Update add-ons"
+          log_message: "Update generic items"
       - *logbook_update
-      - alias: "Update - Standard"
+      - alias: "Update - Generic"
         continue_on_error: true
         repeat:
           while:
@@ -969,6 +899,58 @@ action:
               wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
               continue_on_timeout: true
               timeout: '{{ input_update_timeout }}'
+
+  - alias: Devices firmware
+    if: '{{ is_there_anything_to_update }}'
+    then:
+      - *recalc_update_list
+      - variables:
+          log_message: "Device's firmware"
+      - *logbook_update
+
+      - alias: "Update - Devices firmware"
+        continue_on_error: true
+        repeat:
+          while:
+            - "{{ input_firmware_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - condition: state
+              entity_id: !input schedule_entity
+              state: "on"
+            - condition: template
+              value_template: >
+                {{ ( states.update
+                  | selectattr('state', 'eq', 'on')
+                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | rejectattr('entity_id', 'in', core_update_entity)
+                  | rejectattr('entity_id', 'in', os_update_entity)
+                  | selectattr('entity_id', 'in', firmware_update_entities)
+                  | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | map(attribute='entity_id')
+                  | list | count | int(0) ) > 0
+                }}
+          sequence:
+            - variables:
+                log_message: "Starting sequence of Devices firmware update"
+            - *logbook_update
+            - *send_telegram_message
+
+            - variables:
+                pending_update_list: >
+                  {{ states.update
+                    | selectattr('state', 'eq', 'on')
+                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | rejectattr('entity_id', 'in', core_update_entity)
+                    | rejectattr('entity_id', 'in', os_update_entity)
+                    | selectattr('entity_id', 'in', firmware_update_entities)
+                    | map(attribute='entity_id')
+                    | list
+                  }}
+                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+            - *logbook_update
+            - *send_telegram_message
+
+            - *update_install
+            - *update_wait
 
   - alias: Update core
     if: '{{ is_there_anything_to_update }}'
@@ -1064,58 +1046,6 @@ action:
                     | selectattr('entity_id', 'in', os_update_entity)
                     | rejectattr('entity_id', 'in', firmware_update_entities)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
-                    | map(attribute='entity_id')
-                    | list
-                  }}
-                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
-            - *logbook_update
-            - *send_telegram_message
-
-            - *update_install
-            - *update_wait
-
-  - alias: Devices firmware
-    if: '{{ is_there_anything_to_update }}'
-    then:
-      - *recalc_update_list
-      - variables:
-          log_message: "Device's firmware"
-      - *logbook_update
-
-      - alias: "Update - Devices firmware"
-        continue_on_error: true
-        repeat:
-          while:
-            - "{{ input_firmware_update_mode in ['patches', 'major_and_minor', 'all'] }}"
-            - condition: state
-              entity_id: !input schedule_entity
-              state: "on"
-            - condition: template
-              value_template: >
-                {{ ( states.update
-                  | selectattr('state', 'eq', 'on')
-                  | selectattr('entity_id', 'in', pending_updates_list)
-                  | rejectattr('entity_id', 'in', core_update_entity)
-                  | rejectattr('entity_id', 'in', os_update_entity)
-                  | selectattr('entity_id', 'in', firmware_update_entities)
-                  | rejectattr('entity_id', 'in', input_update_exclusions)
-                  | map(attribute='entity_id')
-                  | list | count | int(0) ) > 0
-                }}
-          sequence:
-            - variables:
-                log_message: "Starting sequence of Devices firmware update"
-            - *logbook_update
-            - *send_telegram_message
-
-            - variables:
-                pending_update_list: >
-                  {{ states.update
-                    | selectattr('state', 'eq', 'on')
-                    | selectattr('entity_id', 'in', pending_updates_list)
-                    | rejectattr('entity_id', 'in', core_update_entity)
-                    | rejectattr('entity_id', 'in', os_update_entity)
-                    | selectattr('entity_id', 'in', firmware_update_entities)
                     | map(attribute='entity_id')
                     | list
                   }}
@@ -1296,6 +1226,15 @@ action:
       - alias: "Run post-update actions"
         continue_on_error: true
         sequence: !input actions_pos_update
+
+  - alias: Set OFF helper flag
+    if:
+      - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
+      - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
+    then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: !input update_process_started_entity
 
   - alias: Done  # All done!
     sequence:
