@@ -906,7 +906,7 @@ action:
                     | map(attribute='entity_id')
                     | list
                     }}
-                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}}..."
+                log_message: "Updating `{{pending_update_list[0]}}`..."
             - *logbook_update
             - *send_telegram_message
 
@@ -920,10 +920,23 @@ action:
 
             - &update_wait
               alias: "Update - Wait"
-              continue_on_error: true
-              wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
-              continue_on_timeout: true
-              timeout: '{{ input_update_timeout }}'
+              sequence:
+                - alias: Wait
+                  continue_on_error: true
+                  wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
+                  continue_on_timeout: true
+                  timeout: '{{ input_update_timeout }}'
+                - if: '{{ wait.completed }}'
+                  then:
+                    - variables:
+                        log_message: '`{{ pending_update_list[0] }}` updated successfuly'
+                    - *logbook_update
+                    - *send_telegram_message
+                  else:
+                    - variables:
+                        log_message: 'ERROR: `{{ pending_update_list[0] }}` update timed out'
+                    - *logbook_update
+                    - *send_telegram_message
 
   - alias: Devices firmware
     if: '{{ is_there_anything_to_update }}'
@@ -970,7 +983,7 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
-                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+                log_message: "Updating `{{pending_update_list[0]}}`..."
             - *logbook_update
             - *send_telegram_message
 
@@ -1022,7 +1035,7 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
-                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+                log_message: "Updating `{{pending_update_list[0]}}`..."
             - *logbook_update
             - *send_telegram_message
 
@@ -1074,7 +1087,7 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
-                log_message: "Updating {{pending_update_list[0]}} of {{pending_update_list}} ..."
+                log_message: "Updating `{{pending_update_list[0]}}`..."
             - *logbook_update
             - *send_telegram_message
 
