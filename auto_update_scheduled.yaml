@@ -451,6 +451,11 @@ blueprint:
 
             The default is 600 seconds (10 minutes).
             You can select any value between 10 seconds and 7200 seconds (2 hours).
+
+            If an update times out:
+            - The automation will log an error message
+            - The automation will continue with the next update
+            - The timed-out update may still complete in the background
           default: 600
           selector:
             number:
@@ -1200,18 +1205,20 @@ action:
 
       - alias: "Restart"
         continue_on_error: true
-        if:
-          - >-
-            {{ input_restart_type != "no-restart" and
-              (
-                states.update
-                | selectattr('attributes.release_summary', 'defined')
-                | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-                | map(attribute='entity_id')
-                | list | count | int(0)
-              ) > 0
-            }}
-        then:
+        sequence:
+          - condition: '{{ input_restart_type != "no-restart" }}'
+          - alias: Wait pending operations  # Wait for any pending operations to complete
+            delay:
+              seconds: 30
+          - condition: |
+              {{
+                ( states.update
+                  | selectattr('attributes.release_summary', 'defined')
+                  | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
+                  | map(attribute='entity_id')
+                  | list | count | int(0)
+                ) > 0
+              }}
           - alias: "Restart - Check config"
             continue_on_error: true
             action: homeassistant.check_config
