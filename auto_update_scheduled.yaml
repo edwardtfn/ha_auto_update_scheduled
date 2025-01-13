@@ -660,24 +660,49 @@ action:
             | first
           }}
         {% endif %}
-      pending_updates_list: |
+      combined_list: |
+        {{
+          (
+            firmware_update_entities | default([]) | list
+            if firmware_update_entities is sequence
+            else [firmware_update_entities | string] if firmware_update_entities is not none else []
+          ) +
+          (
+            general_update_entities | default([]) | list
+            if general_update_entities is sequence
+            else [general_update_entities | string] if general_update_entities is not none else []
+          ) +
+          (
+            core_update_entity | default([]) | list
+            if core_update_entity is sequence
+            else [core_update_entity | string] if core_update_entity is not none else []
+          ) +
+          (
+            os_update_entity | default([]) | list
+            if os_update_entity is sequence
+            else [os_update_entity | string] if os_update_entity is not none else []
+          ) +
+          (
+            supervisor_update_entity | default([]) | list
+            if supervisor_update_entity is sequence
+            else [supervisor_update_entity | string] if supervisor_update_entity is not none else []
+          )
+        }}
+      pending_update_list: |
         {{
           states.update
           | default([])
           | selectattr("state", "eq", "on")
-          | selectattr('entity_id', 'in', [ firmware_update_entities,
-                                            general_update_entities,
-                                            core_update_entity,
-                                            os_update_entity,
-                                            supervisor_update_entity])
+          | selectattr('entity_id', 'in', combined_list)
           | rejectattr('entity_id', 'in', input_update_exclusions)
           | map(attribute='entity_id')
           | list
         }}
-      pending_update_count: '{{ pending_updates_list | list | count | int(0) }}'
+      pending_update_count: '{{ pending_update_list | list | count | int(0) }}'
 
   - variables:
-      updates_list: '{{ pending_updates_list }}'
+      update_list: '{{ pending_update_list }}'
+      updates_list: '{{ pending_update_list }}'
       is_there_anything_to_update: '{{ pending_update_count > 0 }}'
 
   - alias: Preparation  # Inform logbook and telegram which update automation is running
@@ -857,7 +882,7 @@ action:
               value_template: >
                 {{ ( states.update
                   | selectattr('state', 'eq', 'on')
-                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | selectattr('entity_id', 'in', pending_update_list)
                   | rejectattr('entity_id', 'in', core_update_entity)
                   | rejectattr('entity_id', 'in', os_update_entity)
                   | rejectattr('entity_id', 'in', firmware_update_entities)
@@ -873,7 +898,7 @@ action:
                 pending_update_list: >
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
-                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | selectattr('entity_id', 'in', pending_update_list)
                     | rejectattr('entity_id', 'in', core_update_entity)
                     | rejectattr('entity_id', 'in', os_update_entity)
                     | rejectattr('entity_id', 'in', firmware_update_entities)
@@ -920,7 +945,7 @@ action:
               value_template: >
                 {{ ( states.update
                   | selectattr('state', 'eq', 'on')
-                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | selectattr('entity_id', 'in', pending_update_list)
                   | rejectattr('entity_id', 'in', core_update_entity)
                   | rejectattr('entity_id', 'in', os_update_entity)
                   | selectattr('entity_id', 'in', firmware_update_entities)
@@ -938,7 +963,7 @@ action:
                 pending_update_list: >
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
-                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | selectattr('entity_id', 'in', pending_update_list)
                     | rejectattr('entity_id', 'in', core_update_entity)
                     | rejectattr('entity_id', 'in', os_update_entity)
                     | selectattr('entity_id', 'in', firmware_update_entities)
@@ -971,7 +996,7 @@ action:
               value_template: >
                 {{ ( states.update
                   | selectattr('state', 'eq', 'on')
-                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | selectattr('entity_id', 'in', pending_update_list)
                   | selectattr('entity_id', 'in', core_update_entity)
                   | rejectattr('entity_id', 'in', os_update_entity)
                   | rejectattr('entity_id', 'in', firmware_update_entities)
@@ -989,7 +1014,7 @@ action:
                 pending_update_list: >
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
-                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | selectattr('entity_id', 'in', pending_update_list)
                     | selectattr('entity_id', 'in', core_update_entity)
                     | rejectattr('entity_id', 'in', os_update_entity)
                     | rejectattr('entity_id', 'in', firmware_update_entities)
@@ -1023,7 +1048,7 @@ action:
               value_template: >
                 {{ ( states.update
                   | selectattr('state', 'eq', 'on')
-                  | selectattr('entity_id', 'in', pending_updates_list)
+                  | selectattr('entity_id', 'in', pending_update_list)
                   | rejectattr('entity_id', 'in', core_update_entity)
                   | selectattr('entity_id', 'in', os_update_entity)
                   | rejectattr('entity_id', 'in', firmware_update_entities)
@@ -1041,7 +1066,7 @@ action:
                 pending_update_list: >
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
-                    | selectattr('entity_id', 'in', pending_updates_list)
+                    | selectattr('entity_id', 'in', pending_update_list)
                     | rejectattr('entity_id', 'in', core_update_entity)
                     | selectattr('entity_id', 'in', os_update_entity)
                     | rejectattr('entity_id', 'in', firmware_update_entities)
@@ -1078,7 +1103,7 @@ action:
           entity_id: >-
             {{ states.update
             | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', pending_updates_list)
+            | selectattr('entity_id', 'in', pending_update_list)
             | rejectattr('entity_id', 'in', input_update_exclusions)
             | map(attribute='entity_id')
             | list
@@ -1090,7 +1115,7 @@ action:
             (
               states.update
               | selectattr('state', 'eq', 'on')
-              | selectattr('entity_id', 'in', pending_updates_list)
+              | selectattr('entity_id', 'in', pending_update_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | list
               | count
@@ -1113,14 +1138,14 @@ action:
             Remaining updates:
             {{ '- ' + states.update
               | selectattr('state', 'eq', 'on')
-              | selectattr('entity_id', 'in', pending_updates_list)
+              | selectattr('entity_id', 'in', pending_update_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | map(attribute='name') | list | join('
 
             - ') if
               states.update
               | selectattr('state', 'eq', 'on')
-              | selectattr('entity_id', 'in', pending_updates_list)
+              | selectattr('entity_id', 'in', pending_update_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
               | map(attribute='name') | list | count | int(0) > 0
               else 'None remaining'
