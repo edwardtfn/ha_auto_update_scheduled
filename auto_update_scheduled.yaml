@@ -441,12 +441,22 @@ blueprint:
 
         update_timeout:
           name: Update Timeout
-          description: Maximum time to wait for each update to complete
-          default: 3600
+          description: |
+            Maximum time to wait for each update to complete.
+
+            This protects the automation of waiting forever for an update that fails.
+
+            Usually updates don't take that very long,
+            so feel free to ajust this time to something that fits better your environment.
+
+            The default is 600 seconds (10 minutes).
+            You can select any value between 10 seconds and 7200 seconds (2 hours).
+          default: 600
           selector:
             number:
-              min: 300
+              min: 10
               max: 7200
+              step: 10
               unit_of_measurement: seconds
               mode: box
 
@@ -541,7 +551,6 @@ variables:
   input_firmware_update_mode: !input firmware_update_mode
   input_general_update_mode: !input general_update_mode
   input_update_inclusion_mode: !input update_inclusion_mode
-  input_update_timeout: !input update_timeout
   input_notification_telegram_enable: !input notification_telegram_enable
   input_notification_telegram_target_id: !input notification_telegram_target_id
   input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
@@ -925,7 +934,7 @@ action:
                   continue_on_error: true
                   wait_template: "{{ is_state(pending_update_list[0], 'off') }}"
                   continue_on_timeout: true
-                  timeout: '{{ input_update_timeout }}'
+                  timeout: !input update_timeout
                 - if: '{{ wait.completed }}'
                   then:
                     - variables:
@@ -1136,7 +1145,7 @@ action:
             ) < 1
           }}
         continue_on_timeout: true
-        timeout: '{{ input_update_timeout }}'
+        timeout: !input update_timeout
 
   - alias: Finishing
     sequence:
