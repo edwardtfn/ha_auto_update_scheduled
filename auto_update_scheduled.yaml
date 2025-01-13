@@ -915,9 +915,14 @@ action:
                     | map(attribute='entity_id')
                     | list
                     }}
-                log_message: "Updating `{{pending_update_list[0]}}`..."
-            - *logbook_update
-            - *send_telegram_message
+
+            - &log_updating
+              alias: Log updating
+              sequence:
+                - variables:
+                    log_message: "Updating `{{pending_update_list[0]}}`..."
+                - *logbook_update
+                - *send_telegram_message
 
             - &update_install
               alias: "Update - Install"
@@ -992,10 +997,8 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
-                log_message: "Updating `{{pending_update_list[0]}}`..."
-            - *logbook_update
-            - *send_telegram_message
 
+            - *log_updating
             - *update_install
             - *update_wait
 
@@ -1044,10 +1047,8 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
-                log_message: "Updating `{{pending_update_list[0]}}`..."
-            - *logbook_update
-            - *send_telegram_message
 
+            - *log_updating
             - *update_install
             - *update_wait
 
@@ -1096,10 +1097,8 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
-                log_message: "Updating `{{pending_update_list[0]}}`..."
-            - *logbook_update
-            - *send_telegram_message
 
+            - *log_updating
             - *update_install
             - *update_wait
 
