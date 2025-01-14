@@ -518,15 +518,20 @@ trigger:
 condition:
   - condition: or
     conditions:
-      - condition: template
-        value_template: >-
-          {{
-            states.update
-            | default([])
-            | selectattr("state", "eq", "on")
-            | rejectattr("entity_id", "in", input_update_exclusions)
-            | list | count | int(0) > 0
-          }}
+      - condition: and
+        conditions:
+          - platform: state
+            entity_id: !input schedule_entity
+            state: 'on'
+          - condition: template
+            value_template: >-
+              {{
+                states.update
+                | default([])
+                | selectattr("state", "eq", "on")
+                | rejectattr("entity_id", "in", input_update_exclusions)
+                | list | count | int(0) > 0
+              }}
       - condition: and
         conditions:
           - condition: trigger
@@ -750,7 +755,11 @@ action:
               message: '{{ log_message }}'
 
   - alias: Report list of updates
-    if: '{{ is_there_anything_to_update }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - variables:
           log_message: >
@@ -773,25 +782,42 @@ action:
     if:
       - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
       - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - action: input_boolean.turn_on
         target:
           entity_id: !input update_process_started_entity
 
   - alias: Pre-update actions
-    if: '{{ is_there_anything_to_update and not is_continuing_from_a_restart }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - '{{ not is_continuing_from_a_restart }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
+      - variables:
+          input_actions_pre_update: !input actions_pre_update
+      - condition: '{{ input_actions_pre_update is sequence }}'
       - *recalc_update_list
       - variables:
           log_message: "Running pre-update actions..."
       - *logbook_update
+      - *send_telegram_message
 
       - alias: "Run pre-update actions"
         continue_on_error: true
         sequence: !input actions_pre_update
 
   - alias: Backup
-    if: '{{ is_there_anything_to_update and not is_continuing_from_a_restart }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - '{{ not is_continuing_from_a_restart }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - *recalc_update_list
       - variables:
@@ -878,7 +904,11 @@ action:
         else: []
 
   - alias: Update generic
-    if: '{{ is_there_anything_to_update }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - *recalc_update_list
       - variables:
@@ -958,7 +988,11 @@ action:
                     - *send_telegram_message
 
   - alias: Devices firmware
-    if: '{{ is_there_anything_to_update }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - *recalc_update_list
       - variables:
@@ -1008,7 +1042,11 @@ action:
             - *update_wait
 
   - alias: Update core
-    if: '{{ is_there_anything_to_update }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - *recalc_update_list
       - variables:
@@ -1058,7 +1096,11 @@ action:
             - *update_wait
 
   - alias: Update OS
-    if: '{{ is_there_anything_to_update }}'
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - platform: state
+        entity_id: !input schedule_entity
+        state: 'on'
     then:
       - *recalc_update_list
       - variables:
@@ -1111,9 +1153,9 @@ action:
     continue_on_error: true
     if:
       - '{{ is_there_anything_to_update }}'
-      - condition: state
+      - platform: state
         entity_id: !input schedule_entity
-        state: "on"
+        state: 'on'
     then:
       - *recalc_update_list
       - variables:
@@ -1271,6 +1313,9 @@ action:
 
   - alias: Post-update actions
     sequence:
+      - variables:
+          input_actions_pos_update: !input actions_pos_update
+      - condition: '{{ input_actions_pos_update is sequence }}'
       - variables:
           log_message: "Running post-update actions"
       - *logbook_update
