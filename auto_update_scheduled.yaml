@@ -1231,9 +1231,26 @@ action:
 
   - alias: Restart  # Restart Home Assistant
     sequence:
-      - condition: '{{ input_restart_type != "no-restart" }}'
       - variables:
           input_restart_type: !input restart_type
+      - condition: '{{ input_restart_type != "no-restart" }}'
+      - alias: Wait pending operations  # Wait for any pending operations to complete
+        continue_on_error: true
+        wait_template: |
+          {{
+            (
+              states.update
+              | rejectattr('state', 'eq', 'off')
+              | rejectattr('entity_id', 'in', input_update_exclusions)
+              | map(attribute='entity_id')
+              | list | count | int(0)
+            ) < 1
+          }}
+        continue_on_timeout: true
+        timeout:
+          seconds: 30
+      - &update_pending_restart_items
+        variables:
           pending_restart_items: |
             {{ states.update
               | selectattr('attributes.release_summary', 'defined')
@@ -1251,20 +1268,8 @@ action:
       - condition: '{{ pending_restart_items_count > 0 }}'
       - variables:
           log_message: >
-            {{ states.update
-              | selectattr('attributes.release_summary', 'defined')
-              | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-              | map(attribute='entity_id')
-              | list
-              | count
-              | int(0)
-            }} item(s) pending a restart:
-            - `{{ states.update
-                | selectattr('attributes.release_summary', 'defined')
-                | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-                | map(attribute='entity_id')
-                | list
-                | join('`
+            {{ pending_restart_items_count }} item(s) pending a restart:
+            - `{{ pending_restart_items | join('`
                 - `')
               }}`
       - *logbook_update
@@ -1273,18 +1278,7 @@ action:
       - alias: "Restart"
         continue_on_error: true
         sequence:
-          - alias: Wait pending operations  # Wait for any pending operations to complete
-            delay:
-              seconds: 30
-          - condition: |
-              {{
-                ( states.update
-                  | selectattr('attributes.release_summary', 'defined')
-                  | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-                  | map(attribute='entity_id')
-                  | list | count | int(0)
-                ) > 0
-              }}
+          - condition: '{{ pending_restart_items_count > 0 }}'
           - alias: "Restart - Check config"
             continue_on_error: true
             action: homeassistant.check_config
