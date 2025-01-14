@@ -11,9 +11,13 @@
 ##### - Home Assistant may restart automatically as part of the update process.                #####
 ##### - Use under your own risk! Please review Home Assistant community discussions about      #####
 #####   the risks involved in auto-updating the system.                                        #####
+##### - SECURITY WARNING:                                                                      #####
+#####   - Ensure you have reliable backups before enabling automatic updates                   #####
+#####   - Auto-updates in production environments may lead to system instability               #####
+#####   - Updates may affect connected devices and integrations                                #####
 ##### - For discussions:                                                                       #####
 #####     https://community.home-assistant.io/t/459281                                         #####
-##### - For support and bug reports:                                                           #####
+##### - For support, bug reports and new ideas:                                                #####
 #####     https://github.com/edwardtfn/ha_auto_update_scheduled/issues                         #####
 ####################################################################################################
 ---
@@ -27,16 +31,25 @@ blueprint:
 
     Update Home Assistant automatically when a new update is available.
 
-    v2025.1.0
+    ## v2025.1.0
 
-    Attention:
+    ## Attention:
 
-    * Home Assistant may restart automatically as part of the update process.
+    - Home Assistant may restart automatically as part of the update process.
 
-    * **Use under your own risk!** Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.
+    - **Use under your own risk!** Please see the discussions on Home Assistant community around the risks involved on auto-updating the system.
 
-    For questions and suggestions, please use
-    [this thread in Home Assistant Community portal](https://community.home-assistant.io/t/scheduled-auto-update-for-home-assistant/459281).
+    - Ensure you have reliable backups before enabling automatic updates.
+
+    - Auto-updates in production environments may lead to system instability.
+
+    - Updates may affect connected devices and integrations.
+
+    ## For discussions:
+      - [Home Assistant Community portal](https://community.home-assistant.io/t/459281)
+
+    ## For support, bug reports and new ideas:
+      - [GitHub Issues](https://github.com/edwardtfn/ha_auto_update_scheduled/issues)
   domain: automation
   source_url: https://raw.githubusercontent.com/edwardtfn/ha_auto_update_scheduled/main/auto_update_scheduled.yaml
   input:
