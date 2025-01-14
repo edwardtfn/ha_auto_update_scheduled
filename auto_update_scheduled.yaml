@@ -764,12 +764,12 @@ action:
       - variables:
           log_message: >
             List of updates:
-              - {{ states.update
+              - `{{ states.update
                 | selectattr('state', 'eq', 'on')
                 | rejectattr('entity_id', 'in', input_update_exclusions)
-                | map(attribute='name') | list | join('
+                | map(attribute='name') | list | join('`
 
-              - ') }}
+              - `') }}`
       - *logbook_update
       - *send_telegram_message
     else:
@@ -1202,29 +1202,54 @@ action:
       - *send_telegram_message
 
       - variables:
-          log_message: >
-            Remaining updates:
-            {{ '- ' + states.update
-              | selectattr('state', 'eq', 'on')
-              | selectattr('entity_id', 'in', pending_update_list)
-              | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='name') | list | join('
-
-            - ') if
+          remaining_updates: |
+            {{
               states.update
               | selectattr('state', 'eq', 'on')
               | selectattr('entity_id', 'in', pending_update_list)
               | rejectattr('entity_id', 'in', input_update_exclusions)
-              | map(attribute='name') | list | count | int(0) > 0
-              else 'None remaining'
+              | map(attribute='name')
+              | list
             }}
-      - *logbook_update
-      - *send_telegram_message
+          remaining_updates_count: '{{ remaining_updates | count | int(0) }}'
+      - if: '{{ remaining_updates_count > 0 }}'
+        then:
+          - variables:
+              log_message: |
+                Remaining updates:
+                  - `{{ remaining_updates | join("`
+
+                  - `")
+                    }}`
+          - *logbook_update
+          - *send_telegram_message
+        else:
+          - variables:
+              log_message: "No remaining items to be updated"
+          - *logbook_update
+          - *send_telegram_message
 
   - alias: Restart  # Restart Home Assistant
     sequence:
+      - condition: '{{ input_restart_type != "no-restart" }}'
       - variables:
           input_restart_type: !input restart_type
+          pending_restart_items: |
+            {{ states.update
+              | selectattr('attributes.release_summary', 'defined')
+              | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
+              | map(attribute='entity_id')
+              | list
+            }}
+          pending_restart_items_count: '{{ pending_restart_items | count | int(0) }}'
+      - if: '{{ pending_restart_items_count < 1 }}'
+        then:
+          - variables:
+              log_message: 'Nothing requiring a restart'
+          - *logbook_update
+          - *send_telegram_message
+      - condition: '{{ pending_restart_items_count > 0 }}'
+      - variables:
           log_message: >
             {{ states.update
               | selectattr('attributes.release_summary', 'defined')
@@ -1234,21 +1259,20 @@ action:
               | count
               | int(0)
             }} item(s) pending a restart:
-            - {{ states.update
+            - `{{ states.update
                 | selectattr('attributes.release_summary', 'defined')
                 | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
                 | map(attribute='entity_id')
                 | list
-                | join('
-                - ')
-              }}
+                | join('`
+                - `')
+              }}`
       - *logbook_update
       - *send_telegram_message
 
       - alias: "Restart"
         continue_on_error: true
         sequence:
-          - condition: '{{ input_restart_type != "no-restart" }}'
           - alias: Wait pending operations  # Wait for any pending operations to complete
             delay:
               seconds: 30
