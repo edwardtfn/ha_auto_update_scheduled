@@ -520,7 +520,7 @@ condition:
     conditions:
       - condition: and
         conditions:
-          - platform: state
+          - condition: state
             entity_id: !input schedule_entity
             state: 'on'
           - condition: template
@@ -757,7 +757,7 @@ action:
   - alias: Report list of updates
     if:
       - '{{ is_there_anything_to_update }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -782,7 +782,7 @@ action:
     if:
       - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
       - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -794,7 +794,7 @@ action:
     if:
       - '{{ is_there_anything_to_update }}'
       - '{{ not is_continuing_from_a_restart }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -815,7 +815,7 @@ action:
     if:
       - '{{ is_there_anything_to_update }}'
       - '{{ not is_continuing_from_a_restart }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -906,7 +906,7 @@ action:
   - alias: Update generic
     if:
       - '{{ is_there_anything_to_update }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -990,7 +990,7 @@ action:
   - alias: Devices firmware
     if:
       - '{{ is_there_anything_to_update }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -1044,7 +1044,7 @@ action:
   - alias: Update core
     if:
       - '{{ is_there_anything_to_update }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -1098,7 +1098,7 @@ action:
   - alias: Update OS
     if:
       - '{{ is_there_anything_to_update }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
@@ -1153,7 +1153,7 @@ action:
     continue_on_error: true
     if:
       - '{{ is_there_anything_to_update }}'
-      - platform: state
+      - condition: state
         entity_id: !input schedule_entity
         state: 'on'
     then:
