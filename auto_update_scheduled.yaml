@@ -593,6 +593,18 @@ variables:
     }}
 
 action:
+  - alias: Refresh update entities
+    action: homeassistant.update_entity
+    data:
+      entity_id: |
+        {{
+          states.update
+          | default([])
+          | rejectattr('entity_id', 'in', input_update_exclusions)
+          | map(attribute='entity_id')
+          | list
+        }}
+
   - &recalc_update_list
     variables:
       firmware_update_entities: >
