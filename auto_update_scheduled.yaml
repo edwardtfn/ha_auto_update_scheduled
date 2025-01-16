@@ -1314,7 +1314,7 @@ action:
       - if: '{{ "remaining_updates" in input_notification_telegram_select_notifications }}'
         then:
           - *send_telegram_message
- 
+
       - variables:
           remaining_updates: |
             {{
