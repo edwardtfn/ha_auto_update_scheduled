@@ -406,6 +406,28 @@ blueprint:
           selector:
             boolean:
 
+        notification_telegram_message_title:
+          name: Telegram notification title
+          description: |
+            `Optional`
+
+            Please select a title to be used on each Telegram notification message.
+
+            You can type a custom text.
+          default:
+            - friendly_name
+          selector:
+            select:
+              custom_value: true
+              multiple: false
+              options:
+                - label: Automation's friendly name
+                  value: friendly_name
+                - label: Automation's entity Id
+                  value: entity_id
+                - label: Blank (no title)
+                  value: blank
+
         notification_telegram_select_notifications:
           name: Select what to notify via Telegram
           description: |
@@ -420,7 +442,6 @@ blueprint:
             - restart
             - post_update_actions
             - done
-
           selector:
             select:
               multiple: true
@@ -616,6 +637,7 @@ variables:
   input_notification_telegram_target_id: !input notification_telegram_target_id
   input_notification_telegram_disable_notification: !input notification_telegram_disable_notification
   input_notification_telegram_select_notifications: !input notification_telegram_select_notifications
+  input_notification_telegram_message_title: !input notification_telegram_message_title
   core_update_entity: >
     {% for u in integration_entities('hassio') | select('search', '^update[.]')
       if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
@@ -643,7 +665,18 @@ variables:
       if friendly_name_tmp is string and friendly_name_tmp | length > 0
       else "Auto-update"
     }}
-
+  telegram_title: |
+    {% if (input_notification_telegram_message_title == "friendly_name") %}
+      {{ friendly_name }}
+    {% elif (input_notification_telegram_message_title == "entity_id") %}
+      {{ this.entity_id }}
+    {% elif (input_notification_telegram_message_title != "blank" and
+              input_notification_telegram_message_title is string and
+              input_notification_telegram_message_title | length > 0) %}
+      {{ input_notification_telegram_message_title }}
+    {% else %}
+      {{ "" }}
+    {% endif %}
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -816,7 +849,7 @@ action:
               - alias: Telegram bot - Send message
                 action: telegram_bot.send_message
                 data:
-                  title: '{{ friendly_name }}'
+                  title: '{{ telegram_title }}'
                   target: "{{ input_notification_telegram_target_id }}"
                   disable_notification: '{{ input_notification_telegram_disable_notification }}'
                   message: '{{ log_message }}'
