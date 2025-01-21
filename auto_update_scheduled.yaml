@@ -809,7 +809,6 @@ action:
           {%- endif %}
         {%- endfor %}
         {{ entities.list }}
-      
       updates_pending: >-
         {% set updates = namespace(list=[]) %}
         {%- for entity in states.update %}
