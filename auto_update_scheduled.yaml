@@ -1085,6 +1085,8 @@ action:
                     | map(attribute='entity_id')
                     | list
                   }}
+            - &get_next_update_entity
+              variables:
                 current_update_entity: '{{ updates_pending[0] }}'
                 current_update_entity_friendly_name: |
                   {{ state_attr(current_update_entity, "friendly_name") | default(current_update_entity) }}
@@ -1177,6 +1179,7 @@ action:
                     | list
                   }}
 
+            - *get_next_update_entity
             - *log_updating
             - *update_install
             - *update_wait
@@ -1227,6 +1230,7 @@ action:
                     | list
                   }}
 
+            - *get_next_update_entity
             - *log_updating
             - *update_install
             - *update_wait
@@ -1277,6 +1281,7 @@ action:
                     | list
                   }}
 
+            - *get_next_update_entity
             - *log_updating
             - *update_install
             - *update_wait
