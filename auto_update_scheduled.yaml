@@ -645,6 +645,7 @@ condition:
         state: 'off'
 
 variables:
+  temp_input_update_exclusions: !input update_exclusions
   input_verbose_logging_bool: !input verbose_logging_bool
   input_core_os_update_mode: !input core_os_update_mode
   input_firmware_update_mode: !input firmware_update_mode
@@ -710,6 +711,75 @@ action:
 
   - &recalc_update_list
     variables:
+      input_update_exclusions: >
+            {% set exclusions = temp_input_update_exclusions | default([]) %}
+
+            {% if input_core_os_update_mode == 'ignore' %}
+              {% set exclusions = exclusions + [core_update_entity | default(""), os_update_entity | default("")] %}
+            {% else %}
+              {% set core_installed_version = states.update | default([]) | selectattr('entity_id', 'in', core_update_entity | default("")) | map(attribute='attributes.installed_version') | list | first | default('') %}
+              {% set core_latest_version = states.update | default([]) | selectattr('entity_id', 'in', core_update_entity | default("")) | map(attribute='attributes.latest_version') | list | first | default('') %}
+              {% set core_version_change = version(core_latest_version) - version(core_installed_version) %}
+              {% set os_installed_version = states.update | default([]) | selectattr('entity_id', 'in', os_update_entity | default("")) | map(attribute='attributes.installed_version') | list | first | default('') %}
+              {% set os_latest_version = states.update | default([]) | selectattr('entity_id', 'in', os_update_entity | default("")) | map(attribute='attributes.latest_version') | list | first | default('') %}
+              {% set os_version_change = version(os_latest_version) - version(os_installed_version) %}
+
+              {% if input_core_os_update_mode == 'patches' %}
+                {% if core_version_change.major or core_version_change.minor or (not core_version_change.patch) %}
+                  {% set exclusions = exclusions + [core_update_entity | default("")] %}
+                {% endif %}
+                {% if os_version_change.major or os_version_change.minor or (not os_version_change.patch) %}
+                  {% set exclusions = exclusions + [os_update_entity | default("")] %}
+                {% endif %}
+              {% elif input_core_os_update_mode == 'major_and_minor' %}
+                {% if (not core_version_change.major) and (not core_version_change.minor) %}
+                  {% set exclusions = exclusions + [core_update_entity | default("")] %}
+                {% endif %}
+                {% if (not os_version_change.major) and (not os_version_change.minor) %}
+                  {% set exclusions = exclusions + [os_update_entity | default("")] %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+
+            {% if input_firmware_update_mode == 'ignore' %}
+              {% set exclusions = exclusions + [ firmware_update_entities ] %}
+            {% else %}
+              {% set ns = namespace(entities = []) %}
+              {% for entity in expand(firmware_update_entities) | rejectattr('entity_id', 'in', exclusions) | selectattr('state', 'eq', 'on') %}
+                {% set entity_version_change = version(entity.attributes.latest_version | default('')) - version(entity.attributes.installed_version | default('')) %}
+                {% if input_firmware_update_mode == 'patches' %}
+                  {% if entity_version_change.major or entity_version_change.minor or (not entity_version_change.patch) %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
+                {% elif input_firmware_update_mode == 'major_and_minor' %}
+                  {% if (not entity_version_change.major) and (not entity_version_change.minor) %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% set exclusions = exclusions + [ ns.entities ] %}
+            {% endif %}
+
+            {% if input_general_update_mode == 'ignore' %}
+              {% set exclusions = exclusions + [ general_update_entities ] %}
+            {% else %}
+              {% set ns = namespace(entities = []) %}
+              {% for entity in expand(general_update_entities) | rejectattr('entity_id', 'in', exclusions) | selectattr('state', 'eq', 'on') %}
+                {% set entity_version_change = version(entity.attributes.latest_version | default('')) - version(entity.attributes.installed_version | default('')) %}
+                {% if input_general_update_mode == 'patches' %}
+                  {% if entity_version_change.major or entity_version_change.minor or (not entity_version_change.patch) %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
+                {% elif input_general_update_mode == 'major_and_minor' %}
+                  {% if (not entity_version_change.major) and (not entity_version_change.minor) %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% set exclusions = exclusions + [ ns.entities ] %}
+            {% endif %}
+
+            {{ exclusions }}
       firmware_update_entities: >
         {{
           states.update
