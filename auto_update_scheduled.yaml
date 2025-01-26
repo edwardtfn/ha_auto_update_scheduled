@@ -711,6 +711,84 @@ action:
 
   - &recalc_update_list
     variables:
+      firmware_update_entities: >
+        {{
+          states.update
+          | default([])
+          | selectattr("state", "eq", "on")
+          | selectattr('attributes.device_class', 'defined')
+          | selectattr('attributes.device_class', 'eq', 'firmware')
+          | map(attribute='entity_id')
+          | list
+        }}
+      general_update_entities: >
+        {% if input_update_inclusion_mode == "all" %}
+          {{
+            states.update
+            | default([])
+            | selectattr('state', 'eq', 'on')
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | map(attribute='entity_id')
+            | list
+          }}
+        {% elif input_update_inclusion_mode == "specified" %}
+          {{
+            states.update
+            | default([])
+            | selectattr('state', 'eq', 'on')
+            | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | map(attribute='entity_id')
+            | list
+          }}
+        {% elif input_update_inclusion_mode == "specified-single" %}
+          {{
+            states.update
+            | default([])
+            | selectattr('state', 'eq', 'on')
+            | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | map(attribute='entity_id')
+            | list
+            | first
+          }}
+        {% elif input_update_inclusion_mode == "searchstring" %}
+          {{
+            states.update
+            | default([])
+            | selectattr('state', 'eq', 'on')
+            | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | map(attribute='entity_id')
+            | list
+          }}
+        {% elif input_update_inclusion_mode == "searchfilter-single" %}
+          {{
+            states.update
+            | default([])
+            | selectattr('state', 'eq', 'on')
+            | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | map(attribute='entity_id')
+            | list
+            | first
+          }}
+        {% endif %}
       input_update_exclusions: >
             {% set exclusions = temp_input_update_exclusions | default([]) %}
 
@@ -818,90 +896,6 @@ action:
             {% endif %}
 
             {{ exclusions }}
-      firmware_update_entities: >
-        {{
-          states.update
-          | default([])
-          | selectattr("state", "eq", "on")
-          | selectattr('attributes.device_class', 'defined')
-          | selectattr('attributes.device_class', 'eq', 'firmware')
-          | rejectattr('entity_id', 'in', input_update_exclusions)
-          | map(attribute='entity_id')
-          | list
-        }}
-      general_update_entities: >
-        {% if input_update_inclusion_mode == "all" %}
-          {{
-            states.update
-            | default([])
-            | selectattr('state', 'eq', 'on')
-            | rejectattr('entity_id', 'in', core_update_entity)
-            | rejectattr('entity_id', 'in', os_update_entity)
-            | rejectattr('entity_id', 'in', supervisor_update_entity)
-            | rejectattr('entity_id', 'in', firmware_update_entities)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | map(attribute='entity_id')
-            | list
-          }}
-        {% elif input_update_inclusion_mode == "specified" %}
-          {{
-            states.update
-            | default([])
-            | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
-            | rejectattr('entity_id', 'in', core_update_entity)
-            | rejectattr('entity_id', 'in', os_update_entity)
-            | rejectattr('entity_id', 'in', supervisor_update_entity)
-            | rejectattr('entity_id', 'in', firmware_update_entities)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | map(attribute='entity_id')
-            | list
-          }}
-        {% elif input_update_inclusion_mode == "specified-single" %}
-          {{
-            states.update
-            | default([])
-            | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
-            | rejectattr('entity_id', 'in', core_update_entity)
-            | rejectattr('entity_id', 'in', os_update_entity)
-            | rejectattr('entity_id', 'in', supervisor_update_entity)
-            | rejectattr('entity_id', 'in', firmware_update_entities)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | map(attribute='entity_id')
-            | list
-            | first
-          }}
-        {% elif input_update_inclusion_mode == "searchstring" %}
-          {{
-            states.update
-            | default([])
-            | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
-            | rejectattr('entity_id', 'in', core_update_entity)
-            | rejectattr('entity_id', 'in', os_update_entity)
-            | rejectattr('entity_id', 'in', supervisor_update_entity)
-            | rejectattr('entity_id', 'in', firmware_update_entities)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | map(attribute='entity_id')
-            | list
-          }}
-        {% elif input_update_inclusion_mode == "searchfilter-single" %}
-          {{
-            states.update
-            | default([])
-            | selectattr('state', 'eq', 'on')
-            | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
-            | rejectattr('entity_id', 'in', core_update_entity)
-            | rejectattr('entity_id', 'in', os_update_entity)
-            | rejectattr('entity_id', 'in', supervisor_update_entity)
-            | rejectattr('entity_id', 'in', firmware_update_entities)
-            | rejectattr('entity_id', 'in', input_update_exclusions)
-            | map(attribute='entity_id')
-            | list
-            | first
-          }}
-        {% endif %}
       combined_list: >-
         {% set entities = namespace(list=[]) %}
         {%- for entity in [firmware_update_entities, general_update_entities,
@@ -1505,7 +1499,7 @@ action:
             {{ states.update
               | selectattr('attributes.release_summary', 'defined')
               | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-              | map(attribute='entity_id')
+              | map(attribute='name')
               | list
             }}
           pending_restart_items_count: '{{ pending_restart_items | count | int(0) }}'
@@ -1574,7 +1568,7 @@ action:
                   log_message: >
                     The system is set to restart automatically when an update requires it.
 
-                    Restarting Home Assistant ({{ input_restart_type }})
+                    Restarting Home Assistant ({{ input_restart_type }})...
               - *logbook_update
               - if: '{{ "restart" in input_notification_telegram_select_notifications }}'
                 then:
