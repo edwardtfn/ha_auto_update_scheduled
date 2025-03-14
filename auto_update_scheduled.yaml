@@ -108,10 +108,17 @@ blueprint:
               mode: slider
 
         update_out_of_schedule:
-          name: Out of schedule entities (optional)
-          description:
+          name: Out of schedule entities
+          description: |
+            `Optional`
+
             You can select update entities which will be updated as soon an update is detected,
             even if outside the schedule windows.
+
+            Notes:
+              - Pause entities will be respected and prevent the update of the out of schedule entities.
+              - The out of schedule update can trigger a restart at an unexpected time outside the normal schedule.
+                Please use it with caution.
           default: []
           selector:
             entity:
@@ -120,8 +127,10 @@ blueprint:
                 - update
 
         pause_entities:
-          name: Pause update entities (optional)
-          description: >
+          name: Pause update entities
+          description: |
+            `Optional`
+
             You can select one or more entities to pause the updates.
             If any of the selected entities is "On" or "True" the system won't be updated on the schedule time.
 
@@ -257,11 +266,13 @@ blueprint:
               multiline: false
 
         update_exclusions:
-          name: Exclusions (optional)
-          description: 'Select the items that should NOT be included on the automated updates.
+          name: Exclusions
+          description: |
+            `Optional`
 
+            Select the items that should NOT be included on the automated updates.
 
-            => Use this if you want to keep some add-on on an specific version and avoid auto-updates to it.'
+            => Use this if you want to keep some add-on on an specific version and avoid auto-updates to it.
           default: []
           selector:
             entity:
@@ -295,8 +306,10 @@ blueprint:
               unit_of_measurement: minutes
 
         max_backup_age:
-          name: Maximum backup age (or zero, to disable) (optional)
-          description:
+          name: Maximum backup age (or zero, to disable)
+          description: |
+            `Optional`
+
             This requires the [Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
             addon to be installed and configured to automatically backup, and provide
             a sensor with the backup states. The setting only checks for the age of
@@ -313,7 +326,7 @@ blueprint:
 
         backup_location:
           name: Backup Location
-          description: >-
+          description: |
             You can create a new backup location under [Settings > System > Storage](https://my.home-assistant.io/redirect/storage/).
 
             Specify where to store the backup for this autoupdate process.
@@ -328,8 +341,10 @@ blueprint:
       collapsed: true
       input:
         actions_pre_update:
-          name: Pre-update actions (optional)
+          name: Pre-update actions
           description: |
+            `Optional`
+
             Actions to execute before the backup or any update starts.
 
             You can use this to send notifications, turn on/off devices or activate scenes before starting the updates.
@@ -346,8 +361,10 @@ blueprint:
             action: {}
 
         actions_pre_restart:
-          name: Pre-restart actions (optional)
+          name: Pre-restart actions
           description: |
+            `Optional`
+
             Actions to execute before the automation requests a restart.
 
             You can use this to send notifications,
@@ -368,8 +385,10 @@ blueprint:
             action: {}
 
         actions_pos_update:
-          name: Post-update actions (optional)
+          name: Post-update actions
           description: |
+            `Optional`
+
             Actions to execute AFTER the update process finishes.
 
             You can use this to send notifications, turn on/off devices or activate scenes after applying  the updates.
@@ -507,14 +526,22 @@ blueprint:
                   value: "host"
 
         verbose_logging_bool:
-          name: Log addon progress with verbosity to the logbook? (optional)
+          name: Log addon progress with verbosity to the logbook?
+          description: |
+            `Optional`
+
+            When enabled, this automation will register each step on the logbook.
+
+            This can be usefull for troubleshooting, but at normal conditions, it won't add much value.
           default: false
           selector:
             boolean: {}
 
         update_process_started_entity:
-          name: '"Update Process Started" Toggle Entity (optional)'
-          description: >
+          name: '"Update Process Started" Toggle Entity'
+          description: |
+            `Optional`
+
             You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
@@ -560,7 +587,6 @@ max_exceeded: warning
 trigger_variables:
   input_pause_entities: !input pause_entities
   input_update_exclusions: !input update_exclusions
-  input_update_out_of_schedule: !input update_out_of_schedule
   schedule_monthday_earliest: !input schedule_monthday_earliest
   schedule_monthday_last: !input schedule_monthday_last
   input_schedule_monthday_earliest: '{{ schedule_monthday_earliest | int(0) }}'
@@ -603,10 +629,17 @@ trigger:
   - id: Pause entities changed
     platform: state
     entity_id: !input pause_entities
+  - id: Out of schedule
+    platform: state
+    entity_id: !input update_out_of_schedule
+    from: "off"
+    to: "on"
 
 condition:
   - condition: or
     conditions:
+      - condition: trigger
+        id: "Out of schedule"
       - condition: and
         conditions:
           - condition: state
@@ -630,12 +663,16 @@ condition:
             entity_id: !input update_process_started_entity
             state: "on"
 
-  - condition: template
-    value_template: >
-      {{
-        (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
-        (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
-      }}
+  - condition: or
+    conditions:
+      - condition: trigger
+        id: "Out of schedule"
+      - condition: template
+        value_template: >
+          {{
+            (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
+            (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
+          }}
 
   - condition: or
     conditions:
@@ -645,6 +682,7 @@ condition:
         state: 'off'
 
 variables:
+  input_update_out_of_schedule: !input update_out_of_schedule
   temp_input_update_exclusions: !input update_exclusions
   input_verbose_logging_bool: !input verbose_logging_bool
   input_core_os_update_mode: !input core_os_update_mode
@@ -713,18 +751,43 @@ action:
     variables:
       firmware_update_entities: >
         {{
-          states.update
+          (
+            (
+              states.update
+              | default([])
+              | selectattr("entity_id", "in", input_update_out_of_schedule)
+            )
+            if trigger.id == "Out of schedule"
+            else
+              (
+                states.update
+                | default([])
+              )
+          )
           | default([])
           | selectattr("state", "eq", "on")
           | selectattr('attributes.device_class', 'defined')
           | selectattr('attributes.device_class', 'eq', 'firmware')
+          | selectattr("entity_id", "in", input_update_out_of_schedule) 
           | map(attribute='entity_id')
           | list
         }}
       general_update_entities: >
         {% if input_update_inclusion_mode == "all" %}
           {{
-            states.update
+            (
+              (
+                states.update
+                | default([])
+                | selectattr("entity_id", "in", input_update_out_of_schedule)
+              )
+              if trigger.id == "Out of schedule"
+              else
+                (
+                  states.update
+                  | default([])
+                )
+            )
             | default([])
             | selectattr('state', 'eq', 'on')
             | rejectattr('entity_id', 'in', core_update_entity)
@@ -736,7 +799,19 @@ action:
           }}
         {% elif input_update_inclusion_mode == "specified" %}
           {{
-            states.update
+            (
+              (
+                states.update
+                | default([])
+                | selectattr("entity_id", "in", input_update_out_of_schedule)
+              )
+              if trigger.id == "Out of schedule"
+              else
+                (
+                  states.update
+                  | default([])
+                )
+            )
             | default([])
             | selectattr('state', 'eq', 'on')
             | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
@@ -749,7 +824,19 @@ action:
           }}
         {% elif input_update_inclusion_mode == "specified-single" %}
           {{
-            states.update
+            (
+              (
+                states.update
+                | default([])
+                | selectattr("entity_id", "in", input_update_out_of_schedule)
+              )
+              if trigger.id == "Out of schedule"
+              else
+                (
+                  states.update
+                  | default([])
+                )
+            )
             | default([])
             | selectattr('state', 'eq', 'on')
             | selectattr('entity_id', 'in', input_update_inclusion_entity_list)
@@ -763,7 +850,19 @@ action:
           }}
         {% elif input_update_inclusion_mode == "searchstring" %}
           {{
-            states.update
+            (
+              (
+                states.update
+                | default([])
+                | selectattr("entity_id", "in", input_update_out_of_schedule)
+              )
+              if trigger.id == "Out of schedule"
+              else
+                (
+                  states.update
+                  | default([])
+                )
+            )
             | default([])
             | selectattr('state', 'eq', 'on')
             | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
@@ -776,7 +875,19 @@ action:
           }}
         {% elif input_update_inclusion_mode == "searchfilter-single" %}
           {{
-            states.update
+            (
+              (
+                states.update
+                | default([])
+                | selectattr("entity_id", "in", input_update_out_of_schedule)
+              )
+              if trigger.id == "Out of schedule"
+              else
+                (
+                  states.update
+                  | default([])
+                )
+            )
             | default([])
             | selectattr('state', 'eq', 'on')
             | selectattr('entity_id', 'match', input_update_inclusion_entity_searchfilter)
@@ -1400,6 +1511,25 @@ action:
       - variables:
           log_message: "Updating all remaining items (if any)"
       - *logbook_update
+      - variables:
+          remaining_items: |
+            {{ states.update
+            | selectattr('state', 'eq', 'on')
+            | selectattr('entity_id', 'in', updates_pending)
+            | rejectattr('entity_id', 'in', input_update_exclusions)
+            | map(attribute='entity_id')
+            | list
+            }}
+          remaining_items_count: '{{ remaining_items | count if remaining_items is sequence else 0 }}'
+
+      - condition: '{{ remaining_items_count > 0 }}'
+
+      - variables:
+          log_message: |
+            Remaining updates:
+              - `{{ remaining_items | join("`\n- `") }}`
+
+      - *logbook_update
       - if: '{{ "update_progress" in input_notification_telegram_select_notifications }}'
         then:
           - *send_telegram_message
@@ -1469,9 +1599,6 @@ action:
           - variables:
               log_message: "No remaining items to be updated"
           - *logbook_update
-          - if: '{{ "remaining_updates" in input_notification_telegram_select_notifications }}'
-            then:
-              - *send_telegram_message
 
   - alias: Restart  # Restart Home Assistant
     sequence:
@@ -1508,9 +1635,6 @@ action:
           - variables:
               log_message: 'Nothing requiring a restart'
           - *logbook_update
-          - if: '{{ "restart" in input_notification_telegram_select_notifications }}'
-            then:
-              - *send_telegram_message
       - condition: '{{ pending_restart_items_count > 0 }}'
       - variables:
           log_message: >
