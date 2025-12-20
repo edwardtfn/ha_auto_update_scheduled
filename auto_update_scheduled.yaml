@@ -774,8 +774,8 @@ variables:
       else "Auto-update"
     }}
   is_telegram_notify: >
-    {{ 
-      input_notification_entity is string and 
+    {{
+      input_notification_entity is string and
       input_notification_entity | length > 0 and
       'telegram' in input_notification_entity.lower()
     }}
