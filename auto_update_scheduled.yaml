@@ -325,7 +325,7 @@ blueprint:
           name: Backup Timeout
           description: >-
             Specify how much time the automation waits for the backup process.
-            We can't check wether the backup was successful.
+            We can't check whether the backup was successful.
             Per default we wait 1 hour to finish the backup.
           default: 60
           selector:
@@ -733,23 +733,23 @@ variables:
   input_notification_message_title: !input notification_message_title
   core_update_entity: >
     {% for u in integration_entities('hassio') | select('search', '^update[.]')
-      if (device_attr(u, 'identifiers') | first)[1] == 'core' %}
+      if (device_attr(u, 'identifiers') | first | default(""))[1] == 'core' %}
         {{ u }}
     {% endfor %}
   os_update_entity: >
     {% for u in integration_entities('hassio') | select('search', '^update[.]')
-      if (device_attr(u, 'identifiers') | first)[1] == 'OS' %}
+      if (device_attr(u, 'identifiers') | first | default(""))[1] == 'OS' %}
         {{ u }}
     {% endfor %}
   supervisor_update_entity: >
     {% for u in integration_entities('hassio') | select('search', '^update[.]')
-      if (device_attr(u, 'identifiers') | first)[1] == 'supervisor' %}
+      if (device_attr(u, 'identifiers') | first | default(""))[1] == 'supervisor' %}
         {{ u }}
     {% endfor %}
   is_resume_after_restart: >
     {{
       input_update_process_started_entity | default([]) | count == 1 and
-      is_state(input_update_process_started_entity | first, "on")
+      is_state(input_update_process_started_entity | first | default(""), "on")
     }}
   is_out_of_schedule_mode: >
     {{
@@ -870,6 +870,7 @@ action:
             | map(attribute='entity_id')
             | list
             | first
+            | default("")
           }}
         {% elif input_update_inclusion_mode == "searchfilter" %}
           {{
@@ -899,6 +900,7 @@ action:
             | map(attribute='entity_id')
             | list
             | first
+            | default("")
           }}
         {% endif %}
       input_update_exclusions: >
