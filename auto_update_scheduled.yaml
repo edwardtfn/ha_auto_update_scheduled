@@ -1390,7 +1390,7 @@ action:
                 - if: '{{ wait.completed }}'
                   then:
                     - variables:
-                        log_message: '"{{ current_update_entity_friendly_name }}" updated successfuly'
+                        log_message: '"{{ current_update_entity_friendly_name }}" updated successfully'
                     - *logbook_update
                     - if: '{{ "update_progress" in input_notification_select_notifications }}'
                       then:
