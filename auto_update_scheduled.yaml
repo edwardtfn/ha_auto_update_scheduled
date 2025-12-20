@@ -51,7 +51,7 @@ blueprint:
     ## For support, bug reports and new ideas:
       - [GitHub Issues](https://github.com/edwardtfn/ha_auto_update_scheduled/issues)
   domain: automation
-  source_url: https://raw.githubusercontent.com/edwardtfn/HomeAssistant-Config/main/blueprints/automation/EdwardTFN/auto_update_scheduled.yaml
+  source_url: https://raw.githubusercontent.com/edwardtfn/ha_auto_update_scheduled/main/auto_update_scheduled.yaml
   input:
     when_section:
       name: When (Schedule, etc.)
@@ -61,20 +61,25 @@ blueprint:
       input:
         schedule_entity:
           name: Schedule entity
-          description: 'You can create an [Schedule](https://www.home-assistant.io/integrations/schedule) under [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
+          description: >
+            You can create a [Schedule](https://www.home-assistant.io/integrations/schedule) under
+            [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
 
-            Note => The schedule windows will define when an update will start. It is possible that a backup, an update or a restart process finishes after the schedule window, but new updates won''t stars outside the schedule windows.'
+            Note => The schedule windows will define when an update will start.
+            It is possible that a backup, an update or a restart process finishes after the schedule window,
+            but new updates won't stars outside the schedule windows.
           default: []
           selector:
             entity:
               multiple: false
               domain: schedule
 
-        schedule_monthday:
-          name: Earliest day in the month to update Home Assistant (optional)
+        schedule_monthday_earliest:
+          name: Earliest day in the month to run the update process
           description: >
             Usually a new major version of Home Assistant is available on the begining of every month.
-            Some people consider those releases as not stable enough and prefer to avoid those versions, not updating the system until the mid of the month (day 15).
+            Some people consider those releases as not stable enough and prefer to avoid those versions,
+            not updating the system until the mid of the month (day 15).
 
             Notes:
               - If you select a day higher than 28 the updates won't run every month.
@@ -129,7 +134,8 @@ blueprint:
             You can select one or more entities to pause the updates.
             If any of the selected entities is "On" or "True" the system won't be updated on the schedule time.
 
-            You can use this to hold your updates when you have a party at home, or when you are on vacations and don''t want to be concerned about updates on Home Assistant.'
+            You can use this to hold your updates when you have a party at home,
+            or when you are on vacations and don't want to be concerned about updates on Home Assistant.
           default: []
           selector:
             entity:
@@ -302,10 +308,6 @@ blueprint:
           default: true
           selector:
             boolean:
-        backup_wait_time:
-          name: Backup wait time
-          description:
-            Select how long the system should wait for the backup to be completed after it is triggered.
 
         last_backup_timestamp_entity:
           name: Last successful automatic backup sensor
@@ -328,9 +330,6 @@ blueprint:
           default: 60
           selector:
             number:
-              min: 0
-              max: 3600
-              step: 10
               mode: box
               min: 1
               max: 180
@@ -363,8 +362,7 @@ blueprint:
             Specify where to store the backup for this autoupdate process.
           default: "/backup"
           selector:
-            duration:
-              enable_day: true
+            backup_location:
 
     actions_section:
       name: Actions (optional)
@@ -715,27 +713,6 @@ condition:
             (now().day >= input_schedule_monthday_earliest or input_schedule_monthday_earliest == 0) and
             (now().day <= input_schedule_monthday_last or input_schedule_monthday_last == 0)
           }}
-
-  - condition: or
-    conditions:
-      - condition: and
-        conditions:
-          - condition: template
-            value_template: >
-              {{ now().day >= ((input_schedule_monthday) | int(0)) }}
-          - condition: state
-            entity_id: !input schedule_entity
-            state: "on"
-      - condition: template
-        value_template: >
-          {% set ns = namespace(found=false) %}
-          {% for item in input_update_out_of_schedule %}
-            {% if item in updates_available %}
-              {% set ns.found = true %}
-              {% break %}
-            {% endif %}
-          {% endfor %}
-          {{ ns.found }}
 
   - condition: or
     conditions:
