@@ -1,8 +1,7 @@
 ---
-name: Validate YAML (secondary files)
+name: Validate YAML
 
-# yamllint disable-line rule:truthy
-on:
+on:  # yamllint disable-line rule:truthy
   push:
     paths:
       - '**/*.yml'
