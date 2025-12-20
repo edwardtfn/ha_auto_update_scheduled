@@ -67,7 +67,7 @@ blueprint:
 
             Note => The schedule windows will define when an update will start.
             It is possible that a backup, an update or a restart process finishes after the schedule window,
-            but new updates won't stars outside the schedule windows.
+            but new updates won't start outside the schedule windows.
           default: []
           selector:
             entity:
