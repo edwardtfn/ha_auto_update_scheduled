@@ -257,7 +257,7 @@ blueprint:
         update_inclusion_entity_searchfilter:
           name: Entity Inclusion Searchfilter
           description: >-
-            => Important: This searchfilter will only be used when the Update Inclusion mode is set to "Searchstring".
+            => Important: This searchfilter will only be used when the Update Inclusion mode is set to "Searchfilter" or "Searchfilter-Single".
             This defines the Searchfilter for finding the right update entities.
             This enables wildcard-like searching for a group of entities, aka "all zigbee entities" or "everything from Sonoff" etc.
           default: ""
@@ -871,7 +871,7 @@ action:
             | list
             | first
           }}
-        {% elif input_update_inclusion_mode == "searchstring" %}
+        {% elif input_update_inclusion_mode == "searchfilter" %}
           {{
             states.update
             | default([])
