@@ -432,8 +432,8 @@ blueprint:
             which can happens over-night. Take this in account when selecting your actions.
 
             Note => Some usefull variables available for your actions:
-              - "`\{\{ updates_list \}\}`" - contains the list of updates when the automation started.
-              - "`\{\{ updates_pending \}\}`" - contains the list of updates remaining to be updated.
+              - `{{ updates_list }}` - contains the list of updates when the automation started.
+              - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
           default: []
           selector:
             action: {}
@@ -456,8 +456,8 @@ blueprint:
             like when a Core update is installed. These actions might not be executed in those cases.
 
             Note => Some usefull variables available for your actions:
-              - "`\{\{ updates_list \}\}`" - contains the list of updates when the automation started.
-              - "`\{\{ updates_pending \}\}`" - contains the list of updates remaining to be updated.
+              - `{{ updates_list }}` - contains the list of updates when the automation started.
+              - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
           default: []
           selector:
             action: {}
@@ -477,8 +477,8 @@ blueprint:
             Take this in account when selecting your actions.
 
             Note => Some usefull variables available for your actions:
-              - "`\{\{ updates_list \}\}`" - contains the list of updates when the automation started.
-              - "`\{\{ updates_pending \}\}`" - contains the list of updates remaining to be updated.
+              - `{{ updates_list }}` - contains the list of updates when the automation started.
+              - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
 
             **IMPORTANT** => Some updates will automatically restart Home Assistant,
             causing the automation to interrupt before finishing, preventing the pos-updates actions to be executed.
@@ -622,11 +622,14 @@ blueprint:
           description: |
             `Optional`
 
-            Please select a title to be used on each notification message.
+            Select a title to be used on each notification message.
 
-            You can type a custom text.
-          default:
-            - friendly_name
+            You can type a custom text or select one of the predefined options.
+
+            The default option "Automation's friendly name" uses the name you gave to this automation
+            when you created it (e.g. "Nightly Auto-update"). If the automation has no friendly name,
+            it falls back to "Home Assistant Auto-update".
+          default: friendly_name
           selector:
             select:
               custom_value: true
@@ -917,7 +920,7 @@ variables:
     {{
       friendly_name_tmp
       if friendly_name_tmp is string and friendly_name_tmp | length > 0
-      else "Auto-update"
+      else "Home Assistant Auto-update"
     }}
   notification_title: |
     {% if (input_notification_message_title == "friendly_name") %}
