@@ -1526,6 +1526,28 @@ action:
                         sequence: !input notification_action_errors
                       - stop: "Backup did not start"
                     else:
+                      - if: >-
+                          {{
+                            is_state(input_run_during_backup, "unknown") or
+                            is_state(input_run_during_backup, "unavailable")
+                          }}
+                        then:
+                          - variables:
+                              log_message: >
+                                ERROR: Backup state sensor changed to {{ states(input_run_during_backup) }}
+                                instead of a backup state. Stopping.
+                          - *logbook_update
+                          - if: >-
+                              {{
+                                "backup" in input_notification_select_notifications or
+                                "errors" in input_notification_select_notifications
+                              }}
+                            then:
+                              - *send_notification
+                          - alias: "Run custom error actions (backup sensor fault)"
+                            continue_on_error: true
+                            sequence: !input notification_action_errors
+                          - stop: "Backup state sensor became unavailable"
                       - variables:
                           log_message: >
                             Backup started ({{ states(input_run_during_backup) }}).
