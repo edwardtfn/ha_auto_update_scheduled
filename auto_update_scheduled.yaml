@@ -407,7 +407,15 @@ blueprint:
     actions_section:
       name: Actions (optional)
       icon: mdi:shoe-print
-      description: Select actions to run at diferent moments on the update process
+      description: >
+        Select actions to run at different moments during the update process.
+
+        The "Pre-update", "Pre-restart" and "Post-update" actions run once at their respective stages.
+
+        The step-specific actions (Starting, Backup, Update progress, Errors, Restart, Done)
+        run at each occurrence of that step and have access to useful variables like the list of
+        pending updates, the current entity being updated, and a log message describing the current step.
+        These are independent of the built-in notification system.
       collapsed: true
       input:
         actions_pre_update:
@@ -480,6 +488,106 @@ blueprint:
           selector:
             action: {}
 
+        notification_action_starting:
+          name: Step action - Starting
+          description: |
+            `Optional`
+
+            Actions to run when the update process starts.
+
+            Useful variables available:
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+              - `{{ updates_pending_count }}` - Number of pending updates.
+              - `{{ log_message }}` - A plain text message describing the current step.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_backup:
+          name: Step action - Backup
+          description: |
+            `Optional`
+
+            Actions to run at each backup-related step (starting, completed, or fallback wait finished).
+
+            Useful variables available:
+              - `{{ log_message }}` - A plain text message describing what happened.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_update_progress:
+          name: Step action - Update progress
+          description: |
+            `Optional`
+
+            Actions to run for each individual update (when it starts and when it completes or times out).
+
+            Useful variables available:
+              - `{{ current_update_entity }}` - The entity id of the update being processed (e.g. `update.home_assistant_core_update`).
+              - `{{ current_update_entity_friendly_name }}` - The friendly name of the update being processed.
+              - `{{ log_message }}` - A plain text message describing the current step.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_errors:
+          name: Step action - Errors and warnings
+          description: |
+            `Optional`
+
+            Actions to run when an error or warning occurs (update timeouts, backup failures,
+            remaining incomplete updates, or backup misconfiguration).
+
+            Useful variables available:
+              - `{{ log_message }}` - A plain text message describing the error.
+              - `{{ current_update_entity }}` - The entity id of the update being processed (when applicable).
+              - `{{ current_update_entity_friendly_name }}` - The friendly name of the update (when applicable).
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_restart:
+          name: Step action - Restart
+          description: |
+            `Optional`
+
+            Actions to run when a restart is pending.
+            These run before the actual restart, giving time for the actions to complete.
+
+            Useful variables available:
+              - `{{ pending_restart_items }}` - List of names of items requiring a restart.
+              - `{{ pending_restart_items_count }}` - Number of items requiring a restart.
+              - `{{ log_message }}` - A plain text message describing the current step.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_done:
+          name: Step action - Done
+          description: |
+            `Optional`
+
+            Actions to run when the update process is complete.
+
+            Useful variables available:
+              - `{{ remaining_updates }}` - List of names of updates that were not completed (if any).
+              - `{{ remaining_updates_count }}` - Number of remaining updates.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining (should match remaining_updates).
+              - `{{ log_message }}` - A plain text message describing the current step.
+          default: []
+          selector:
+            action: {}
+
     notification_section:
       name: Notifications (optional)
       icon: mdi:bell
@@ -500,7 +608,7 @@ blueprint:
 
             Note: Notifications are sent in plain text.
             If your notification service supports rich formatting (e.g. Telegram MarkdownV2),
-            you can use the pre/post-update actions to send custom formatted notifications instead.
+            you can use the step actions to send custom formatted notifications instead.
 
             Leave empty to disable notifications.
           default: []
@@ -558,118 +666,6 @@ blueprint:
                   value: restart
                 - label: Done (includes remaining updates)
                   value: done
-
-    custom_actions_section:
-      name: Custom actions (optional)
-      icon: mdi:script-text
-      description: >
-        Run custom actions at specific steps during the update process.
-        These actions are independent of the built-in notifications — they will always run
-        when configured, regardless of the notification settings.
-
-        All actions have access to useful variables like the list of pending updates,
-        the current entity being updated, and a log message describing the current step.
-      collapsed: true
-      input:
-        notification_action_starting:
-          name: Starting
-          description: |
-            `Optional`
-
-            Actions to run when the update process starts.
-
-            Useful variables available:
-              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
-              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
-              - `{{ updates_pending_count }}` - Number of pending updates.
-              - `{{ log_message }}` - A plain text message describing the current step.
-          default: []
-          selector:
-            action: {}
-
-        notification_action_backup:
-          name: Backup
-          description: |
-            `Optional`
-
-            Actions to run at each backup-related step (starting, completed, or fallback wait finished).
-
-            Useful variables available:
-              - `{{ log_message }}` - A plain text message describing what happened.
-              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
-              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
-          default: []
-          selector:
-            action: {}
-
-        notification_action_update_progress:
-          name: Update progress
-          description: |
-            `Optional`
-
-            Actions to run for each individual update (when it starts and when it completes or times out).
-
-            Useful variables available:
-              - `{{ current_update_entity }}` - The entity id of the update being processed (e.g. `update.home_assistant_core_update`).
-              - `{{ current_update_entity_friendly_name }}` - The friendly name of the update being processed.
-              - `{{ log_message }}` - A plain text message describing the current step.
-              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
-              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
-          default: []
-          selector:
-            action: {}
-
-        notification_action_errors:
-          name: Errors and warnings
-          description: |
-            `Optional`
-
-            Actions to run when an error or warning occurs (update timeouts, backup failures,
-            remaining incomplete updates, or backup misconfiguration).
-
-            Useful variables available:
-              - `{{ log_message }}` - A plain text message describing the error.
-              - `{{ current_update_entity }}` - The entity id of the update being processed (when applicable).
-              - `{{ current_update_entity_friendly_name }}` - The friendly name of the update (when applicable).
-              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
-              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
-          default: []
-          selector:
-            action: {}
-
-        notification_action_restart:
-          name: Restart
-          description: |
-            `Optional`
-
-            Actions to run when a restart is pending.
-            These run before the actual restart, giving time for the actions to complete.
-
-            Useful variables available:
-              - `{{ pending_restart_items }}` - List of names of items requiring a restart.
-              - `{{ pending_restart_items_count }}` - Number of items requiring a restart.
-              - `{{ log_message }}` - A plain text message describing the current step.
-              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
-          default: []
-          selector:
-            action: {}
-
-        notification_action_done:
-          name: Done
-          description: |
-            `Optional`
-
-            Actions to run when the update process is complete.
-
-            Useful variables available:
-              - `{{ remaining_updates }}` - List of names of updates that were not completed (if any).
-              - `{{ remaining_updates_count }}` - Number of remaining updates.
-              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
-              - `{{ updates_pending }}` - List of update entity ids remaining (should match remaining_updates).
-              - `{{ log_message }}` - A plain text message describing the current step.
-          default: []
-          selector:
-            action: {}
 
     general_settings:
       name: General settings (optional)
