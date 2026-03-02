@@ -1335,6 +1335,16 @@ action:
                   }}
                 then:
                   - *send_notification
+              - &reset_helper_flag
+                alias: "Reset helper flag before stopping"
+                if:
+                  - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
+                  - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
+                then:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: !input update_process_started_entity
+                    continue_on_error: true
               - stop: "Backup state sensor is unavailable"
           - variables:
               log_message: >
@@ -1364,6 +1374,7 @@ action:
                   }}
                 then:
                   - *send_notification
+              - *reset_helper_flag
               - stop: "Backup system did not become idle in time"
 
   - alias: Backup
@@ -1416,6 +1427,7 @@ action:
               - alias: "Run custom error actions (backup misconfigured)"
                 continue_on_error: true
                 sequence: !input notification_action_errors
+              - *reset_helper_flag
               - stop: "Auto backup mode misconfigured"
 
           - alias: Determine if a backup is needed
@@ -1524,6 +1536,7 @@ action:
                       - alias: "Run custom error actions (backup may not have started)"
                         continue_on_error: true
                         sequence: !input notification_action_errors
+                      - *reset_helper_flag
                       - stop: "Backup did not start"
                     else:
                       - if: >-
@@ -1547,6 +1560,7 @@ action:
                           - alias: "Run custom error actions (backup sensor fault)"
                             continue_on_error: true
                             sequence: !input notification_action_errors
+                          - *reset_helper_flag
                           - stop: "Backup state sensor became unavailable"
                       - variables:
                           log_message: >
