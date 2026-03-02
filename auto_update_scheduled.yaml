@@ -1510,8 +1510,9 @@ action:
                     then:
                       - variables:
                           log_message: >
-                            WARNING: Backup state sensor did not change within 30 seconds.
-                            The backup may not have started. Continuing with updates...
+                            ERROR: Backup state sensor did not change within 30 seconds.
+                            The backup may not have started. Stopping to avoid running updates
+                            without a backup.
                       - *logbook_update
                       - if: >-
                           {{
@@ -1523,6 +1524,7 @@ action:
                       - alias: "Run custom error actions (backup may not have started)"
                         continue_on_error: true
                         sequence: !input notification_action_errors
+                      - stop: "Backup did not start"
                     else:
                       - variables:
                           log_message: >
@@ -1956,7 +1958,11 @@ action:
                 Remaining updates:
                 - {{ remaining_updates | join("\n- ") }}
           - *logbook_update
-          - if: '{{ "errors" in input_notification_select_notifications }}'
+          - if: >-
+              {{
+                "done" in input_notification_select_notifications or
+                "errors" in input_notification_select_notifications
+              }}
             then:
               - *send_notification
           - alias: "Run custom error actions (remaining updates)"
