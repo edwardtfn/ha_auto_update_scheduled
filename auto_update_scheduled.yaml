@@ -1471,10 +1471,12 @@ action:
                   is_state(input_update_process_started_entity | first | default(""), "off")
                 }}
             then:
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: "{{ input_update_process_started_entity }}"
-                continue_on_error: true
+              - if: '{{ input_update_process_started_entity | default([]) | count > 0 }}'
+                then:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: "{{ input_update_process_started_entity }}"
+                    continue_on_error: true
               - variables:
                   log_message: "Backing up Home Assistant"
               - *logbook_update
@@ -1954,19 +1956,12 @@ action:
                 Remaining updates:
                 - {{ remaining_updates | join("\n- ") }}
           - *logbook_update
-          - if: >-
-              {{
-                "done" in input_notification_select_notifications or
-                "errors" in input_notification_select_notifications
-              }}
+          - if: '{{ "errors" in input_notification_select_notifications }}'
             then:
               - *send_notification
           - alias: "Run custom error actions (remaining updates)"
             continue_on_error: true
             sequence: !input notification_action_errors
-          - alias: "Run custom done actions (remaining updates)"
-            continue_on_error: true
-            sequence: !input notification_action_done
         else:
           - variables:
               log_message: "No remaining items to be updated"
