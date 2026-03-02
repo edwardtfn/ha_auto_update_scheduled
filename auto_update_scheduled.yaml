@@ -559,6 +559,118 @@ blueprint:
                 - label: Done (includes remaining updates)
                   value: done
 
+    custom_actions_section:
+      name: Custom actions (optional)
+      icon: mdi:script-text
+      description: >
+        Run custom actions at specific steps during the update process.
+        These actions are independent of the built-in notifications — they will always run
+        when configured, regardless of the notification settings.
+
+        All actions have access to useful variables like the list of pending updates,
+        the current entity being updated, and a log message describing the current step.
+      collapsed: true
+      input:
+        notification_action_starting:
+          name: Starting
+          description: |
+            `Optional`
+
+            Actions to run when the update process starts.
+
+            Useful variables available:
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+              - `{{ updates_pending_count }}` - Number of pending updates.
+              - `{{ log_message }}` - A plain text message describing the current step.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_backup:
+          name: Backup
+          description: |
+            `Optional`
+
+            Actions to run at each backup-related step (starting, completed, or fallback wait finished).
+
+            Useful variables available:
+              - `{{ log_message }}` - A plain text message describing what happened.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_update_progress:
+          name: Update progress
+          description: |
+            `Optional`
+
+            Actions to run for each individual update (when it starts and when it completes or times out).
+
+            Useful variables available:
+              - `{{ current_update_entity }}` - The entity id of the update being processed (e.g. `update.home_assistant_core_update`).
+              - `{{ current_update_entity_friendly_name }}` - The friendly name of the update being processed.
+              - `{{ log_message }}` - A plain text message describing the current step.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_errors:
+          name: Errors and warnings
+          description: |
+            `Optional`
+
+            Actions to run when an error or warning occurs (update timeouts, backup failures,
+            remaining incomplete updates, or backup misconfiguration).
+
+            Useful variables available:
+              - `{{ log_message }}` - A plain text message describing the error.
+              - `{{ current_update_entity }}` - The entity id of the update being processed (when applicable).
+              - `{{ current_update_entity_friendly_name }}` - The friendly name of the update (when applicable).
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining to be processed.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_restart:
+          name: Restart
+          description: |
+            `Optional`
+
+            Actions to run when a restart is pending.
+            These run before the actual restart, giving time for the actions to complete.
+
+            Useful variables available:
+              - `{{ pending_restart_items }}` - List of names of items requiring a restart.
+              - `{{ pending_restart_items_count }}` - Number of items requiring a restart.
+              - `{{ log_message }}` - A plain text message describing the current step.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+          default: []
+          selector:
+            action: {}
+
+        notification_action_done:
+          name: Done
+          description: |
+            `Optional`
+
+            Actions to run when the update process is complete.
+
+            Useful variables available:
+              - `{{ remaining_updates }}` - List of names of updates that were not completed (if any).
+              - `{{ remaining_updates_count }}` - Number of remaining updates.
+              - `{{ updates_list }}` - List of all update entity ids detected when the automation started.
+              - `{{ updates_pending }}` - List of update entity ids remaining (should match remaining_updates).
+              - `{{ log_message }}` - A plain text message describing the current step.
+          default: []
+          selector:
+            action: {}
+
     general_settings:
       name: General settings (optional)
       icon: mdi:cog
@@ -1145,6 +1257,9 @@ action:
                       title: '{{ notification_title }}'
                       message: '{{ notification_message }}'
                     continue_on_error: true
+      - alias: "Run custom starting actions"
+        continue_on_error: true
+        sequence: !input notification_action_starting
     else:
       - variables:
           log_message: "{{ friendly_name }} started but there's nothing to update"
@@ -1299,6 +1414,9 @@ action:
               - if: '{{ "errors" in input_notification_select_notifications }}'
                 then:
                   - *send_notification
+              - alias: "Run custom error actions (backup misconfigured)"
+                continue_on_error: true
+                sequence: !input notification_action_errors
               - stop: "Auto backup mode misconfigured"
 
           - alias: Determine if a backup is needed
@@ -1364,6 +1482,9 @@ action:
               - if: '{{ "backup" in input_notification_select_notifications }}'
                 then:
                   - *send_notification
+              - alias: "Run custom backup actions (starting)"
+                continue_on_error: true
+                sequence: !input notification_action_backup
 
               - alias: "Call backup service"
                 action: backup.create_automatic
@@ -1374,28 +1495,22 @@ action:
                   - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
                 then:
                   - variables:
-                      log_message: "Backup triggered. Waiting for backup system to return to idle..."
+                      log_message: "Backup triggered. Waiting for backup to start..."
                   - *logbook_update
-                  - alias: "Brief delay to allow backup state to transition"
-                    delay:
-                      seconds: 5
-                  - alias: "Wait for backup system to become idle after backup"
-                    if:
-                      - '{{ not is_state(input_run_during_backup, "idle") }}'
-                    then:
-                      - wait_for_trigger:
-                          - trigger: state
-                            entity_id: !input run_during_backup
-                            to: "idle"
-                        continue_on_timeout: true
-                        timeout:
-                          minutes: "{{ input_backup_timeout | int(60) }}"
-                  - if: '{{ not is_state(input_run_during_backup, "idle") }}'
+                  - alias: "Wait for backup state to leave idle (confirms backup started)"
+                    wait_for_trigger:
+                      - trigger: state
+                        entity_id: !input run_during_backup
+                        from: "idle"
+                    continue_on_timeout: true
+                    timeout:
+                      seconds: 30
+                  - if: '{{ is_state(input_run_during_backup, "idle") }}'
                     then:
                       - variables:
                           log_message: >
-                            WARNING: Backup did not complete within {{ input_backup_timeout }} minutes.
-                            Continuing with updates...
+                            WARNING: Backup state sensor did not change within 30 seconds.
+                            The backup may not have started. Continuing with updates...
                       - *logbook_update
                       - if: >-
                           {{
@@ -1404,13 +1519,50 @@ action:
                           }}
                         then:
                           - *send_notification
+                      - alias: "Run custom error actions (backup may not have started)"
+                        continue_on_error: true
+                        sequence: !input notification_action_errors
                     else:
                       - variables:
-                          log_message: "Backup completed successfully"
+                          log_message: >
+                            Backup started ({{ states(input_run_during_backup) }}).
+                            Waiting for backup system to return to idle...
                       - *logbook_update
-                      - if: '{{ "backup" in input_notification_select_notifications }}'
+                      - alias: "Wait for backup system to become idle after backup"
+                        wait_for_trigger:
+                          - trigger: state
+                            entity_id: !input run_during_backup
+                            to: "idle"
+                        continue_on_timeout: true
+                        timeout:
+                          minutes: "{{ input_backup_timeout | int(60) }}"
+                      - if: '{{ not is_state(input_run_during_backup, "idle") }}'
                         then:
-                          - *send_notification
+                          - variables:
+                              log_message: >
+                                WARNING: Backup did not complete within {{ input_backup_timeout }} minutes.
+                                Continuing with updates...
+                          - *logbook_update
+                          - if: >-
+                              {{
+                                "backup" in input_notification_select_notifications or
+                                "errors" in input_notification_select_notifications
+                              }}
+                            then:
+                              - *send_notification
+                          - alias: "Run custom error actions (backup timeout)"
+                            continue_on_error: true
+                            sequence: !input notification_action_errors
+                        else:
+                          - variables:
+                              log_message: "Backup completed successfully"
+                          - *logbook_update
+                          - if: '{{ "backup" in input_notification_select_notifications }}'
+                            then:
+                              - *send_notification
+                          - alias: "Run custom backup actions (completed)"
+                            continue_on_error: true
+                            sequence: !input notification_action_backup
                 else:
                   - variables:
                       log_message: >
@@ -1426,6 +1578,9 @@ action:
                   - if: '{{ "backup" in input_notification_select_notifications }}'
                     then:
                       - *send_notification
+                  - alias: "Run custom backup actions (fallback wait done)"
+                    continue_on_error: true
+                    sequence: !input notification_action_backup
 
   - alias: Update generic
     if:
@@ -1497,6 +1652,9 @@ action:
                 - if: '{{ "update_progress" in input_notification_select_notifications }}'
                   then:
                     - *send_notification
+                - alias: "Run custom update progress actions"
+                  continue_on_error: true
+                  sequence: !input notification_action_update_progress
 
             - &update_install
               alias: "Update - Install"
@@ -1522,6 +1680,9 @@ action:
                     - if: '{{ "update_progress" in input_notification_select_notifications }}'
                       then:
                         - *send_notification
+                    - alias: "Run custom update progress actions (success)"
+                      continue_on_error: true
+                      sequence: !input notification_action_update_progress
                   else:
                     - variables:
                         log_message: 'ERROR: "{{ current_update_entity_friendly_name }}" update timed out'
@@ -1533,6 +1694,9 @@ action:
                         }}
                       then:
                         - *send_notification
+                    - alias: "Run custom error actions (update timeout)"
+                      continue_on_error: true
+                      sequence: !input notification_action_errors
 
   - alias: Devices firmware
     if:
@@ -1798,6 +1962,12 @@ action:
               }}
             then:
               - *send_notification
+          - alias: "Run custom error actions (remaining updates)"
+            continue_on_error: true
+            sequence: !input notification_action_errors
+          - alias: "Run custom done actions (remaining updates)"
+            continue_on_error: true
+            sequence: !input notification_action_done
         else:
           - variables:
               log_message: "No remaining items to be updated"
@@ -1848,6 +2018,9 @@ action:
       - if: '{{ "restart" in input_notification_select_notifications }}'
         then:
           - *send_notification
+      - alias: "Run custom restart actions"
+        continue_on_error: true
+        sequence: !input notification_action_restart
 
       - alias: "Restart"
         continue_on_error: true
@@ -1940,4 +2113,7 @@ action:
       - if: '{{ "done" in input_notification_select_notifications }}'
         then:
           - *send_notification
+      - alias: "Run custom done actions"
+        continue_on_error: true
+        sequence: !input notification_action_done
 ...
