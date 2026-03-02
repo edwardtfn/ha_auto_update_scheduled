@@ -494,6 +494,10 @@ blueprint:
             Notify entities are provided by notification integrations (e.g. Telegram, email, etc.)
             and are listed under the `notify` domain.
 
+            If your notification target is not listed, you can create a
+            [Notification Group](https://www.home-assistant.io/integrations/group/#notify-groups)
+            (even with a single device) to make it available as a selectable entity.
+
             Note: Notifications are sent in plain text.
             If your notification service supports rich formatting (e.g. Telegram MarkdownV2),
             you can use the pre/post-update actions to send custom formatted notifications instead.
@@ -1198,9 +1202,26 @@ action:
       - if:
           - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
           - '{{ not is_state(input_run_during_backup, "idle") }}'
-          - '{{ not is_state(input_run_during_backup, "unknown") }}'
-          - '{{ not is_state(input_run_during_backup, "unavailable") }}'
         then:
+          - if: >-
+              {{
+                is_state(input_run_during_backup, "unknown") or
+                is_state(input_run_during_backup, "unavailable")
+              }}
+            then:
+              - variables:
+                  log_message: >
+                    Backup state sensor is {{ states(input_run_during_backup) }}.
+                    Cannot determine if a backup is in progress. Stopping.
+              - *logbook_update
+              - if: >-
+                  {{
+                    "backup" in input_notification_select_notifications or
+                    "errors" in input_notification_select_notifications
+                  }}
+                then:
+                  - *send_notification
+              - stop: "Backup state sensor is unavailable"
           - variables:
               log_message: >
                 Backup system is busy ({{ states(input_run_during_backup) }}).
@@ -1257,139 +1278,152 @@ action:
               ).total_seconds()
             }}
 
-      - alias: Skip backup section if mode is "never"
-        condition: '{{ input_backup_mode != "never" }}'
+      - alias: Backup section
+        if:
+          - '{{ input_backup_mode != "never" }}'
+        then:
+          - alias: Validate auto mode prerequisites
+            if:
+              - '{{ input_backup_mode == "auto" }}'
+              - >-
+                {{
+                  (input_run_during_backup is not string or input_run_during_backup | length == 0) or
+                  (input_last_backup_timestamp_entity is not string or input_last_backup_timestamp_entity | length == 0)
+                }}
+            then:
+              - variables:
+                  log_message: >
+                    ERROR: Auto backup mode requires both the Backup state sensor and
+                    Last successful automatic backup sensor to be configured. Stopping.
+              - *logbook_update
+              - if: '{{ "errors" in input_notification_select_notifications }}'
+                then:
+                  - *send_notification
+              - stop: "Auto backup mode misconfigured"
 
-      - alias: Determine if a backup is needed
-        variables:
-          needs_backup: >
-            {% if input_backup_mode == "always" %}
-              {{ true }}
-            {% elif input_backup_mode == "auto" %}
-              {% if input_last_backup_timestamp_entity is not string or
-                    input_last_backup_timestamp_entity | length == 0 %}
-                {{ true }}
-              {% else %}
-                {% set last_backup_state = states(input_last_backup_timestamp_entity) %}
-                {% if last_backup_state in ["unknown", "unavailable", ""] or
-                      last_backup_state is none %}
+          - alias: Determine if a backup is needed
+            variables:
+              needs_backup: >
+                {% if input_backup_mode == "always" %}
                   {{ true }}
-                {% elif input_max_backup_age_seconds > 0 and
-                        (as_timestamp(now()) - as_timestamp(last_backup_state)) > input_max_backup_age_seconds %}
-                  {{ true }}
+                {% elif input_backup_mode == "auto" %}
+                  {% set last_backup_state = states(input_last_backup_timestamp_entity) %}
+                  {% if last_backup_state in ["unknown", "unavailable", ""] or
+                        last_backup_state is none %}
+                    {{ true }}
+                  {% elif input_max_backup_age_seconds > 0 and
+                          (as_timestamp(now()) - as_timestamp(last_backup_state)) > input_max_backup_age_seconds %}
+                    {{ true }}
+                  {% else %}
+                    {{ false }}
+                  {% endif %}
                 {% else %}
                   {{ false }}
                 {% endif %}
-              {% endif %}
-            {% else %}
-              {{ false }}
-            {% endif %}
 
-      - alias: Log backup age check result (auto mode)
-        if:
-          - '{{ input_backup_mode == "auto" }}'
-        then:
-          - if: '{{ needs_backup }}'
-            then:
-              - variables:
-                  log_message: >
-                    {% if input_last_backup_timestamp_entity is not string or
-                          input_last_backup_timestamp_entity | length == 0 %}
-                      No backup timestamp sensor configured. Creating a backup to be safe.
-                    {% else %}
-                      {% set last_backup_state = states(input_last_backup_timestamp_entity) %}
-                      {% if last_backup_state in ["unknown", "unavailable", ""] or
-                            last_backup_state is none %}
-                        Backup timestamp sensor is {{ last_backup_state }}. Creating a backup to be safe.
-                      {% else %}
-                        Last backup is too old
-                        ({{ relative_time(as_datetime(last_backup_state)) }} ago).
-                        Creating a new backup...
-                      {% endif %}
-                    {% endif %}
-              - *logbook_update
-            else:
-              - variables:
-                  log_message: "Recent backup detected. Skipping backup creation."
-              - *logbook_update
-
-      - alias: "Create backup"
-        continue_on_error: true
-        if:
-          - '{{ needs_backup }}'
-          - condition: state
-            entity_id: !input update_process_started_entity
-            state: 'off'
-        then:
-          - action: input_boolean.turn_on
-            target:
-              entity_id: "{{ input_update_process_started_entity }}"
-            continue_on_error: true
-          - variables:
-              log_message: "Backing up Home Assistant"
-          - *logbook_update
-          - if: '{{ "backup" in input_notification_select_notifications }}'
-            then:
-              - *send_notification
-
-          - alias: "Call backup service"
-            action: backup.create_automatic
-            continue_on_error: true
-
-          - alias: "Wait for backup to complete"
+          - alias: Log backup age check result (auto mode)
             if:
-              - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
+              - '{{ input_backup_mode == "auto" }}'
             then:
-              - variables:
-                  log_message: "Backup triggered. Waiting for backup system to return to idle..."
-              - *logbook_update
-              - alias: "Brief delay to allow backup state to transition"
-                delay:
-                  seconds: 5
-              - alias: "Wait for backup system to become idle after backup"
-                wait_for_trigger:
-                  - trigger: state
-                    entity_id: !input run_during_backup
-                    to: "idle"
-                continue_on_timeout: true
-                timeout:
-                  minutes: "{{ input_backup_timeout | int(60) }}"
-              - if: '{{ not is_state(input_run_during_backup, "idle") }}'
+              - if: '{{ needs_backup }}'
                 then:
                   - variables:
                       log_message: >
-                        WARNING: Backup did not complete within {{ input_backup_timeout }} minutes.
-                        Continuing with updates...
+                        {% set last_backup_state = states(input_last_backup_timestamp_entity) %}
+                        {% if last_backup_state in ["unknown", "unavailable", ""] or
+                              last_backup_state is none %}
+                          Backup timestamp sensor is {{ last_backup_state }}. Creating a backup to be safe.
+                        {% else %}
+                          Last backup is too old
+                          ({{ relative_time(as_datetime(last_backup_state)) }} ago).
+                          Creating a new backup...
+                        {% endif %}
                   - *logbook_update
-                  - if: >-
-                      {{
-                        "backup" in input_notification_select_notifications or
-                        "errors" in input_notification_select_notifications
-                      }}
-                    then:
-                      - *send_notification
                 else:
                   - variables:
-                      log_message: "Backup completed successfully"
+                      log_message: "Recent backup detected. Skipping backup creation."
                   - *logbook_update
-                  - if: '{{ "backup" in input_notification_select_notifications }}'
-                    then:
-                      - *send_notification
-            else:
+
+          - alias: "Create backup"
+            continue_on_error: true
+            if:
+              - '{{ needs_backup }}'
+              - condition: state
+                entity_id: !input update_process_started_entity
+                state: 'off'
+            then:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: "{{ input_update_process_started_entity }}"
+                continue_on_error: true
               - variables:
-                  log_message: >
-                    Backup triggered.
-                    No backup state sensor configured, waiting {{ input_backup_timeout | int(60) }} minutes...
-              - *logbook_update
-              - alias: "Wait for the backup (fallback delay)"
-                delay:
-                  minutes: "{{ input_backup_timeout | int(60) }}"
-              - variables:
-                  log_message: "Backup wait time finished. Continuing..."
+                  log_message: "Backing up Home Assistant"
               - *logbook_update
               - if: '{{ "backup" in input_notification_select_notifications }}'
                 then:
                   - *send_notification
+
+              - alias: "Call backup service"
+                action: backup.create_automatic
+                continue_on_error: true
+
+              - alias: "Wait for backup to complete"
+                if:
+                  - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
+                then:
+                  - variables:
+                      log_message: "Backup triggered. Waiting for backup system to return to idle..."
+                  - *logbook_update
+                  - alias: "Brief delay to allow backup state to transition"
+                    delay:
+                      seconds: 5
+                  - alias: "Wait for backup system to become idle after backup"
+                    if:
+                      - '{{ not is_state(input_run_during_backup, "idle") }}'
+                    then:
+                      - wait_for_trigger:
+                          - trigger: state
+                            entity_id: !input run_during_backup
+                            to: "idle"
+                        continue_on_timeout: true
+                        timeout:
+                          minutes: "{{ input_backup_timeout | int(60) }}"
+                  - if: '{{ not is_state(input_run_during_backup, "idle") }}'
+                    then:
+                      - variables:
+                          log_message: >
+                            WARNING: Backup did not complete within {{ input_backup_timeout }} minutes.
+                            Continuing with updates...
+                      - *logbook_update
+                      - if: >-
+                          {{
+                            "backup" in input_notification_select_notifications or
+                            "errors" in input_notification_select_notifications
+                          }}
+                        then:
+                          - *send_notification
+                    else:
+                      - variables:
+                          log_message: "Backup completed successfully"
+                      - *logbook_update
+                      - if: '{{ "backup" in input_notification_select_notifications }}'
+                        then:
+                          - *send_notification
+                else:
+                  - variables:
+                      log_message: >
+                        Backup triggered.
+                        No backup state sensor configured, waiting {{ input_backup_timeout | int(60) }} minutes...
+                  - *logbook_update
+                  - alias: "Wait for the backup (fallback delay)"
+                    delay:
+                      minutes: "{{ input_backup_timeout | int(60) }}"
+                  - variables:
+                      log_message: "Backup wait time finished. Continuing..."
+                  - *logbook_update
+                  - if: '{{ "backup" in input_notification_select_notifications }}'
+                    then:
+                      - *send_notification
 
   - alias: Update generic
     if:
