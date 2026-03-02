@@ -1118,6 +1118,7 @@ action:
 
             - {{ states.update
                 | selectattr('state', 'eq', 'on')
+                | selectattr('entity_id', 'in', updates_pending)
                 | rejectattr('entity_id', 'in', input_update_exclusions)
                 | map(attribute='name') | list | join("\n- ") }}
       - *logbook_update
@@ -1182,6 +1183,54 @@ action:
           log_message: "Pre-update actions completed"
       - *logbook_update
 
+  - alias: Wait for backup system to be idle  # Wait if a backup is already in progress
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - '{{ not is_resume_after_restart }}'
+      - condition: state
+        entity_id: !input schedule_entity
+        state: 'on'
+    then:
+      - variables:
+          input_run_during_backup: !input run_during_backup
+          input_backup_timeout_minutes: !input backup_timeout
+          input_backup_timeout: '{{ input_backup_timeout_minutes | int(60) }}'
+      - if:
+          - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
+          - '{{ not is_state(input_run_during_backup, "idle") }}'
+          - '{{ not is_state(input_run_during_backup, "unknown") }}'
+          - '{{ not is_state(input_run_during_backup, "unavailable") }}'
+        then:
+          - variables:
+              log_message: >
+                Backup system is busy ({{ states(input_run_during_backup) }}).
+                Waiting up to {{ input_backup_timeout }} minutes for it to become idle...
+          - *logbook_update
+          - if: '{{ "backup" in input_notification_select_notifications }}'
+            then:
+              - *send_notification
+          - alias: "Wait for backup system to become idle"
+            wait_for_trigger:
+              - trigger: state
+                entity_id: !input run_during_backup
+                to: "idle"
+            continue_on_timeout: true
+            timeout:
+              minutes: "{{ input_backup_timeout | int(60) }}"
+          - if: '{{ not is_state(input_run_during_backup, "idle") }}'
+            then:
+              - variables:
+                  log_message: "Backup system did not become idle in time. Stopping."
+              - *logbook_update
+              - if: >-
+                  {{
+                    "backup" in input_notification_select_notifications or
+                    "errors" in input_notification_select_notifications
+                  }}
+                then:
+                  - *send_notification
+              - stop: "Backup system did not become idle in time"
+
   - alias: Backup
     if:
       - '{{ is_there_anything_to_update }}'
@@ -1210,41 +1259,6 @@ action:
 
       - alias: Skip backup section if mode is "never"
         condition: '{{ input_backup_mode != "never" }}'
-
-      - alias: Wait for backup system to be idle  # Wait if a backup is already in progress
-        continue_on_error: true
-        if:
-          - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
-          - '{{ not is_state(input_run_during_backup, "idle") }}'
-          - '{{ not is_state(input_run_during_backup, "unknown") }}'
-          - '{{ not is_state(input_run_during_backup, "unavailable") }}'
-        then:
-          - variables:
-              log_message: >
-                Backup system is busy ({{ states(input_run_during_backup) }}).
-                Waiting up to {{ input_backup_timeout }} minutes for it to become idle...
-          - *logbook_update
-          - if: '{{ "backup" in input_notification_select_notifications }}'
-            then:
-              - *send_notification
-          - alias: "Wait for backup system to become idle"
-            wait_template: '{{ is_state(input_run_during_backup, "idle") }}'
-            continue_on_timeout: true
-            timeout:
-              minutes: "{{ input_backup_timeout | int(60) }}"
-          - if: '{{ not is_state(input_run_during_backup, "idle") }}'
-            then:
-              - variables:
-                  log_message: "Backup system did not become idle in time. Stopping."
-              - *logbook_update
-              - if: >-
-                  {{
-                    "backup" in input_notification_select_notifications or
-                    "errors" in input_notification_select_notifications
-                  }}
-                then:
-                  - *send_notification
-              - stop: "Backup system did not become idle in time"
 
       - alias: Determine if a backup is needed
         variables:
@@ -1289,7 +1303,7 @@ action:
                         Backup timestamp sensor is {{ last_backup_state }}. Creating a backup to be safe.
                       {% else %}
                         Last backup is too old
-                        ({{ relative_time(strptime(last_backup_state, '%Y-%m-%dT%H:%M:%S%z')) }} ago).
+                        ({{ relative_time(as_datetime(last_backup_state)) }} ago).
                         Creating a new backup...
                       {% endif %}
                     {% endif %}
@@ -1329,8 +1343,14 @@ action:
               - variables:
                   log_message: "Backup triggered. Waiting for backup system to return to idle..."
               - *logbook_update
+              - alias: "Brief delay to allow backup state to transition"
+                delay:
+                  seconds: 5
               - alias: "Wait for backup system to become idle after backup"
-                wait_template: '{{ is_state(input_run_during_backup, "idle") }}'
+                wait_for_trigger:
+                  - trigger: state
+                    entity_id: !input run_during_backup
+                    to: "idle"
                 continue_on_timeout: true
                 timeout:
                   minutes: "{{ input_backup_timeout | int(60) }}"
@@ -1735,7 +1755,11 @@ action:
                 Remaining updates:
                 - {{ remaining_updates | join("\n- ") }}
           - *logbook_update
-          - if: '{{ "errors" in input_notification_select_notifications }}'
+          - if: >-
+              {{
+                "done" in input_notification_select_notifications or
+                "errors" in input_notification_select_notifications
+              }}
             then:
               - *send_notification
         else:
