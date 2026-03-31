@@ -613,9 +613,7 @@ blueprint:
             Leave empty to disable notifications.
           default: []
           selector:
-            entity:
-              multiple: false
-              domain: notify
+            action: {}
 
         notification_message_title:
           name: Notification title
@@ -1242,19 +1240,27 @@ action:
           - &send_notification
             sequence:
               - variables:
-                  notification_message: '{{ log_message }}'
+                  notification_message: "{{ log_message }}"
+                  notification_service: >
+                    {% set n = input_notification_entity %}
+                    {% if n is string %}
+                      {{ n }}
+                    {% elif n is iterable and n | count > 0 %}
+                      {% set item = n | first %}
+                      {{ item.action if item is mapping else item }}
+                    {% else %}
+                      {{ '' }}
+                    {% endif %}
               - if:
                   - condition: template
-                    value_template: '{{ input_notification_entity | length > 0 }}'
-                    alias: Check if notification entity is configured
+                    value_template: "{{ notification_service | length > 0 }}"
+                    alias: Check if notification action is configured
                 then:
                   - alias: Notify - Send message
-                    action: notify.send_message
-                    target:
-                      entity_id: '{{ input_notification_entity }}'
+                    action: "{{ notification_service }}"
                     data:
-                      title: '{{ notification_title }}'
-                      message: '{{ notification_message }}'
+                      title: "{{ notification_title }}"
+                      message: "{{ notification_message }}"
                     continue_on_error: true
       - alias: "Run custom starting actions"
         continue_on_error: true
