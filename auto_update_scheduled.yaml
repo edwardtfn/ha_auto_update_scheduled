@@ -1155,14 +1155,12 @@ action:
               {% endif %}
 
               {% if input_minimum_patch_version | int(0) > 0 %}
-                {% if core_latest_version and
-                      version(core_latest_version).patch | int(-1) >= 0 and
-                      version(core_latest_version).patch | int(-1) < input_minimum_patch_version | int(0) %}
+                {% set core_patch = version(core_latest_version).patch | int(-1) if core_latest_version else -1 %}
+                {% if core_patch >= 0 and core_patch < input_minimum_patch_version | int(0) %}
                   {% set exclusions = exclusions + [core_update_entity | default("")] %}
                 {% endif %}
-                {% if os_latest_version and
-                      version(os_latest_version).patch | int(-1) >= 0 and
-                      version(os_latest_version).patch | int(-1) < input_minimum_patch_version | int(0) %}
+                {% set os_patch = version(os_latest_version).patch | int(-1) if os_latest_version else -1 %}
+                {% if os_patch >= 0 and os_patch < input_minimum_patch_version | int(0) %}
                   {% set exclusions = exclusions + [os_update_entity | default("")] %}
                 {% endif %}
               {% endif %}
