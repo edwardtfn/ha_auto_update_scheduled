@@ -22,7 +22,7 @@
 ####################################################################################################
 ---
 blueprint:
-  name: Home Assistant Auto-update on a schedule base v2026.5.4
+  name: Home Assistant Auto-update on a schedule base v2026.5.5
   author: Edward Firmo (https://github.com/edwardtfn)
   homeassistant:
     min_version: 2025.8.0
@@ -31,7 +31,7 @@ blueprint:
 
     Update Home Assistant automatically when a new update is available.
 
-    ## v2026.5.4
+    ## v2026.5.5
 
     ## Attention:
 
@@ -2084,7 +2084,16 @@ action:
         timeout: !input update_timeout
 
   - alias: Finishing
-    sequence:
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: '{{ is_out_of_schedule_mode }}'
+          - condition: state
+            entity_id: !input schedule_entity
+            state: 'on'
+    then:
       - *recalc_update_list
       - variables:
           log_message: "Finishing update process"
@@ -2256,7 +2265,16 @@ action:
         continue_on_error: true
 
   - alias: Done  # All done!
-    sequence:
+    if:
+      - '{{ is_there_anything_to_update }}'
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: '{{ is_out_of_schedule_mode }}'
+          - condition: state
+            entity_id: !input schedule_entity
+            state: 'on'
+    then:
       - variables:
           log_message: "Done!"
       - *logbook_update
