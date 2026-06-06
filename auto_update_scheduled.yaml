@@ -788,14 +788,6 @@ trigger_variables:
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
   input_update_process_started_entity: !input update_process_started_entity
   update_out_of_schedule: !input update_out_of_schedule
-  installable_entities: >
-    {% set ns = namespace(list=[]) %}
-    {% for e in states.update | default([]) %}
-      {% if (e.attributes.supported_features | int(0)) | bitwise_and(1) %}
-        {% set ns.list = ns.list + [e.entity_id] %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.list }}
 
 trigger:
   - id: HA Schedule based
@@ -807,15 +799,16 @@ trigger:
   - id: New update
     platform: template
     value_template: >-
-      {{
-        states.update
-        | default([])
-        | selectattr("state", "eq", "on")
-        | selectattr("entity_id", "in", installable_entities)
-        | rejectattr("entity_id", "in", input_update_exclusions)
-        | rejectattr("entity_id", "in", update_out_of_schedule)
-        | list | count | int(0) > 0
-      }}
+      {% set ns = namespace(found=false) %}
+      {% for e in states.update | default([])
+           | selectattr("state", "eq", "on")
+           | rejectattr("entity_id", "in", input_update_exclusions)
+           | rejectattr("entity_id", "in", update_out_of_schedule) %}
+        {% if (e.attributes.supported_features | int(0)) | bitwise_and(1) %}
+          {% set ns.found = true %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.found }}
   - id: New day
     platform: template
     value_template: >
@@ -912,6 +905,14 @@ condition:
         state: 'off'
 
 variables:
+  installable_entities: >
+    {% set ns = namespace(list=[]) %}
+    {% for e in states.update | default([]) %}
+      {% if (e.attributes.supported_features | int(0)) | bitwise_and(1) %}
+        {% set ns.list = ns.list + [e.entity_id] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.list }}
   temp_input_update_exclusions: !input update_exclusions
   input_verbose_logging_bool: !input verbose_logging_bool
   input_core_os_update_mode: !input core_os_update_mode
