@@ -1016,6 +1016,9 @@ variables:
   # Update entities already processed in this run (successfully or not).
   # Prevents a failed or hanging update from being retried until the schedule window closes.
   attempted_updates: []
+  # Update entities successfully installed in this run.
+  # Allows the restart step to run after the schedule window closes only when this run installed something.
+  installed_updates: []
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -1920,6 +1923,9 @@ action:
                     attempted_updates: '{{ attempted_updates + [current_update_entity] }}'
                 - if: '{{ wait.completed }}'
                   then:
+                    - alias: Mark update as installed  # Updates the run-level variable (HA 2025.4+ scoping)
+                      variables:
+                        installed_updates: '{{ installed_updates + [current_update_entity] }}'
                     - variables:
                         log_message: '"{{ current_update_entity_friendly_name }}" updated successfully'
                     - *logbook_update
@@ -2205,9 +2211,11 @@ action:
           }}
         continue_on_timeout: true
         timeout: !input update_timeout
-      - alias: "Update - Remaining - Mark as attempted"  # Lets the restart step know updates ran in this run
+      - alias: "Update - Remaining - Mark as processed"  # Updates the run-level variables (HA 2025.4+ scoping)
         variables:
           attempted_updates: '{{ attempted_updates + remaining_items }}'
+          installed_updates: >-
+            {{ installed_updates + (remaining_items | select('is_state', 'off') | list) }}
 
   - alias: Finishing
     if:
@@ -2263,13 +2271,13 @@ action:
       - variables:
           input_restart_type: !input restart_type
       - condition: '{{ input_restart_type != "no-restart" }}'
-      - alias: Schedule guard  # Restart only within the schedule, in out-of-schedule mode or after updates in this run
+      - alias: Schedule guard  # Restart only within the schedule, in out-of-schedule mode or after installs in this run
         condition: or
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
           - condition: template
-            value_template: '{{ attempted_updates | count > 0 }}'
+            value_template: '{{ installed_updates | count > 0 }}'
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
