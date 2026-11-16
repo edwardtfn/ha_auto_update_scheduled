@@ -778,7 +778,7 @@ blueprint:
         update_timeout:
           name: Update Timeout
           description: |
-            Maximum time to wait for each update to complete.
+            Maximum time to wait for each update to complete after the install request returns.
 
             This protects the automation of waiting forever for an update that fails.
 
