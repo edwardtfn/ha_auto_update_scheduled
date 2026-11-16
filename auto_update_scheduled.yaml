@@ -1034,9 +1034,18 @@ action:
     variables:
       firmware_update_entities: >
         {% if is_out_of_schedule_mode %}
-          {# For out-of-schedule triggers, return empty list #}
-          {# The update_out_of_schedule list will be added to combined_list directly #}
-          []
+          {# Out-of-schedule: only the selected entities, classified so the firmware update mode applies #}
+          {{
+            states.update
+            | default([])
+            | selectattr("state", "eq", "on")
+            | selectattr('entity_id', 'in', update_out_of_schedule | default([]))
+            | selectattr('attributes.device_class', 'defined')
+            | selectattr('attributes.device_class', 'eq', 'firmware')
+            | rejectattr('entity_id', 'in', input_update_exclusions)
+            | map(attribute='entity_id')
+            | list
+          }}
         {% else %}
           {{
             states.update
@@ -1051,9 +1060,20 @@ action:
         {% endif %}
       general_update_entities: >
         {% if is_out_of_schedule_mode %}
-          {# For out-of-schedule triggers, return empty list #}
-          {# The update_out_of_schedule list will be added to combined_list directly #}
-          []
+          {# Out-of-schedule: only the selected entities, classified so the general update mode applies #}
+          {{
+            states.update
+            | default([])
+            | selectattr('state', 'eq', 'on')
+            | selectattr('entity_id', 'in', update_out_of_schedule | default([]))
+            | rejectattr('entity_id', 'in', core_update_entity)
+            | rejectattr('entity_id', 'in', os_update_entity)
+            | rejectattr('entity_id', 'in', supervisor_update_entity)
+            | rejectattr('entity_id', 'in', firmware_update_entities)
+            | rejectattr('entity_id', 'in', input_update_exclusions)
+            | map(attribute='entity_id')
+            | list
+          }}
         {% elif input_update_inclusion_mode == "all" %}
           {{
             states.update
