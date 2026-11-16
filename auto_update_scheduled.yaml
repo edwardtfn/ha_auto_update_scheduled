@@ -162,6 +162,10 @@ blueprint:
               ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
               ❌ From 2022.11.x to 2022.12.x will be ignored (minor update).
               ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
+            * Minor and patches (skip major):
+              ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
+              ✅ From 2022.11.x to 2022.12.x will be updated (minor update).
+              ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
             * Don't update: Ignore any update.
 
           default: "all"
@@ -173,6 +177,8 @@ blueprint:
                   value: "all"
                 - label: Patches only
                   value: "patches"
+                - label: Minor and patches (skip major)
+                  value: "minor_and_patches"
                 - label: Don't update
                   value: "ignore"
 
@@ -186,6 +192,10 @@ blueprint:
             * Patches only:
               ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
               ❌ From 2022.11.x to 2022.12.x will be ignored (minor update).
+              ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
+            * Minor and patches (skip major):
+              ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
+              ✅ From 2022.11.x to 2022.12.x will be updated (minor update).
               ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
             * Don't update: Ignore any update.
 
@@ -204,6 +214,10 @@ blueprint:
             * Patches only:
               ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
               ❌ From 2022.11.x to 2022.12.x will be ignored (minor update).
+              ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
+            * Minor and patches (skip major):
+              ✅ From 2022.11.0 to 2022.11.3 will be updated (patches).
+              ✅ From 2022.11.x to 2022.12.x will be updated (minor update).
               ❌ From 2022.12.x to 2023.1.x will be ignored (major update).
             * Don't update: Ignore any update.
 
@@ -1140,6 +1154,10 @@ action:
                   {% if (not entity_version_change.major) and (not entity_version_change.minor) %}
                     {% set ns.entities = ns.entities + [ entity.entity_id ] %}
                   {% endif %}
+                {% elif input_core_os_update_mode == 'minor_and_patches' %}
+                  {% if entity_version_change.major %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
                 {% endif %}
                 {% if input_minimum_patch_version | int(0) > 0 and
                       entity.entity_id not in ns.entities %}
@@ -1174,6 +1192,10 @@ action:
                   {% if (not entity_version_change.major) and (not entity_version_change.minor) %}
                     {% set ns.entities = ns.entities + [ entity.entity_id ] %}
                   {% endif %}
+                {% elif input_firmware_update_mode == 'minor_and_patches' %}
+                  {% if entity_version_change.major %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
                 {% endif %}
                 {% if input_minimum_patch_version | int(0) > 0 and
                       entity.entity_id not in ns.entities %}
@@ -1206,6 +1228,10 @@ action:
                   {% endif %}
                 {% elif input_general_update_mode == 'major_and_minor' %}
                   {% if (not entity_version_change.major) and (not entity_version_change.minor) %}
+                    {% set ns.entities = ns.entities + [ entity.entity_id ] %}
+                  {% endif %}
+                {% elif input_general_update_mode == 'minor_and_patches' %}
+                  {% if entity_version_change.major %}
                     {% set ns.entities = ns.entities + [ entity.entity_id ] %}
                   {% endif %}
                 {% endif %}
@@ -1799,7 +1825,7 @@ action:
         continue_on_error: true
         repeat:
           while:
-            - "{{ input_general_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - "{{ input_general_update_mode in ['patches', 'minor_and_patches', 'major_and_minor', 'all'] }}"
             - condition: or
               conditions:
                 - condition: template
@@ -1925,7 +1951,7 @@ action:
         continue_on_error: true
         repeat:
           while:
-            - "{{ input_firmware_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - "{{ input_firmware_update_mode in ['patches', 'minor_and_patches', 'major_and_minor', 'all'] }}"
             - condition: or
               conditions:
                 - condition: template
@@ -1986,7 +2012,7 @@ action:
         continue_on_error: true
         repeat:
           while:
-            - "{{ input_core_os_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - "{{ input_core_os_update_mode in ['patches', 'minor_and_patches', 'major_and_minor', 'all'] }}"
             - condition: or
               conditions:
                 - condition: template
@@ -2050,7 +2076,7 @@ action:
         continue_on_error: true
         repeat:
           while:
-            - "{{ input_core_os_update_mode in ['patches', 'major_and_minor', 'all'] }}"
+            - "{{ input_core_os_update_mode in ['patches', 'minor_and_patches', 'major_and_minor', 'all'] }}"
             - condition: or
               conditions:
                 - condition: template
