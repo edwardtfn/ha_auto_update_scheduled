@@ -1940,6 +1940,7 @@ action:
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
                     | selectattr('entity_id', 'in', firmware_update_entities)
+                    | rejectattr('entity_id', 'in', input_update_exclusions)
                     | map(attribute='entity_id')
                     | list
                   }}
