@@ -2210,12 +2210,22 @@ action:
       - &update_pending_restart_items
         variables:
           pending_restart_items: |
-            {{ states.update
-              | selectattr('attributes.release_summary', 'defined')
-              | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
-              | map(attribute='name')
-              | list
-            }}
+            {%- set ns = namespace(items=states.update
+                | selectattr('attributes.release_summary', 'defined')
+                | selectattr('attributes.release_summary', 'search', "<ha-alert alert-type='error'>")
+                | map(attribute='name') | list, repos=[]) -%}
+            {#- Marketplace (HA 2026.11+): restart repairs restart_required_<repo_id>_<ref> carry no name in issues() -#}
+            {%- for e in integration_entities('marketplace') if e.startswith('update.') -%}
+              {%- for i in device_attr(e, 'identifiers') or [] if i[0] == 'marketplace' -%}
+                {%- set ns.repos = ns.repos + [['restart_required_' ~ i[1] ~ '_', state_attr(e, 'friendly_name') or e]] -%}
+              {%- endfor -%}
+            {%- endfor -%}
+            {%- for key in issues() if key[0] == 'marketplace' and key[1].startswith('restart_required') -%}
+              {%- set n = namespace(name='marketplace') -%}
+              {%- for r in ns.repos if key[1].startswith(r[0]) -%}{%- set n.name = r[1] -%}{%- endfor -%}
+              {%- set ns.items = ns.items + [n.name] -%}
+            {%- endfor -%}
+            {{ ns.items }}
           pending_restart_items_count: '{{ pending_restart_items | count | int(0) }}'
       - if: '{{ pending_restart_items_count < 1 }}'
         then:
