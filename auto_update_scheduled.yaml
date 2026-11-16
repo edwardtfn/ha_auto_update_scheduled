@@ -2185,6 +2185,9 @@ action:
           }}
         continue_on_timeout: true
         timeout: !input update_timeout
+      - alias: "Update - Remaining - Mark as attempted"  # Lets the restart step know updates ran in this run
+        variables:
+          attempted_updates: '{{ attempted_updates + remaining_items }}'
 
   - alias: Finishing
     if:
@@ -2240,6 +2243,16 @@ action:
       - variables:
           input_restart_type: !input restart_type
       - condition: '{{ input_restart_type != "no-restart" }}'
+      - alias: Schedule guard  # Restart only within the schedule, in out-of-schedule mode or after updates in this run
+        condition: or
+        conditions:
+          - condition: template
+            value_template: '{{ is_out_of_schedule_mode }}'
+          - condition: template
+            value_template: '{{ attempted_updates | count > 0 }}'
+          - condition: state
+            entity_id: !input schedule_entity
+            state: 'on'
       - alias: Wait pending operations  # Wait for any pending operations to complete
         continue_on_error: true
         wait_template: |
