@@ -1999,6 +1999,7 @@ action:
                 {{ ( states.update
                   | selectattr('state', 'eq', 'on')
                   | selectattr('entity_id', 'in', core_update_entity)
+                  | selectattr('entity_id', 'in', combined_list)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
                   | rejectattr('entity_id', 'in', attempted_updates)
                   | map(attribute='entity_id')
@@ -2011,6 +2012,7 @@ action:
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
                     | selectattr('entity_id', 'in', core_update_entity)
+                    | selectattr('entity_id', 'in', combined_list)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
                     | rejectattr('entity_id', 'in', attempted_updates)
                     | map(attribute='entity_id')
@@ -2061,6 +2063,7 @@ action:
                 {{ ( states.update
                   | selectattr('state', 'eq', 'on')
                   | selectattr('entity_id', 'in', os_update_entity)
+                  | selectattr('entity_id', 'in', combined_list)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
                   | rejectattr('entity_id', 'in', attempted_updates)
                   | map(attribute='entity_id')
@@ -2073,6 +2076,7 @@ action:
                   {{ states.update
                     | selectattr('state', 'eq', 'on')
                     | selectattr('entity_id', 'in', os_update_entity)
+                    | selectattr('entity_id', 'in', combined_list)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
                     | rejectattr('entity_id', 'in', attempted_updates)
                     | map(attribute='entity_id')
