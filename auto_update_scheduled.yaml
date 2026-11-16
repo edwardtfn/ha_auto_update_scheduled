@@ -999,6 +999,9 @@ variables:
       {% endif %}
     {% endfor %}
     {{ ns.list }}
+  # Update entities already processed in this run (successfully or not).
+  # Prevents a failed or hanging update from being retried until the schedule window closes.
+  attempted_updates: []
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -1813,6 +1816,7 @@ action:
                   | rejectattr('entity_id', 'in', os_update_entity)
                   | rejectattr('entity_id', 'in', firmware_update_entities)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | rejectattr('entity_id', 'in', attempted_updates)
                   | map(attribute='entity_id')
                   | list | count | int(0) ) > 0
                 }}
@@ -1826,6 +1830,7 @@ action:
                     | rejectattr('entity_id', 'in', os_update_entity)
                     | rejectattr('entity_id', 'in', firmware_update_entities)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | rejectattr('entity_id', 'in', attempted_updates)
                     | map(attribute='entity_id')
                     | list
                   }}
@@ -1864,6 +1869,9 @@ action:
                   wait_template: '{{ is_state(current_update_entity, "off") }}'
                   continue_on_timeout: true
                   timeout: !input update_timeout
+                - alias: Mark update as attempted  # Updates the run-level variable (HA 2025.4+ scoping)
+                  variables:
+                    attempted_updates: '{{ attempted_updates + [current_update_entity] }}'
                 - if: '{{ wait.completed }}'
                   then:
                     - variables:
@@ -1931,6 +1939,7 @@ action:
                   | selectattr('state', 'eq', 'on')
                   | selectattr('entity_id', 'in', firmware_update_entities)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | rejectattr('entity_id', 'in', attempted_updates)
                   | map(attribute='entity_id')
                   | list | count | int(0) ) > 0
                 }}
@@ -1941,6 +1950,7 @@ action:
                     | selectattr('state', 'eq', 'on')
                     | selectattr('entity_id', 'in', firmware_update_entities)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | rejectattr('entity_id', 'in', attempted_updates)
                     | map(attribute='entity_id')
                     | list
                   }}
@@ -1990,6 +2000,7 @@ action:
                   | selectattr('state', 'eq', 'on')
                   | selectattr('entity_id', 'in', core_update_entity)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | rejectattr('entity_id', 'in', attempted_updates)
                   | map(attribute='entity_id')
                   | list | count | int(0) ) > 0
                 }}
@@ -2001,6 +2012,7 @@ action:
                     | selectattr('state', 'eq', 'on')
                     | selectattr('entity_id', 'in', core_update_entity)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | rejectattr('entity_id', 'in', attempted_updates)
                     | map(attribute='entity_id')
                     | list
                   }}
@@ -2050,6 +2062,7 @@ action:
                   | selectattr('state', 'eq', 'on')
                   | selectattr('entity_id', 'in', os_update_entity)
                   | rejectattr('entity_id', 'in', input_update_exclusions)
+                  | rejectattr('entity_id', 'in', attempted_updates)
                   | map(attribute='entity_id')
                   | list | count | int(0) ) > 0
                 }}
@@ -2061,6 +2074,7 @@ action:
                     | selectattr('state', 'eq', 'on')
                     | selectattr('entity_id', 'in', os_update_entity)
                     | rejectattr('entity_id', 'in', input_update_exclusions)
+                    | rejectattr('entity_id', 'in', attempted_updates)
                     | map(attribute='entity_id')
                     | list
                   }}
@@ -2092,6 +2106,7 @@ action:
             | selectattr('state', 'eq', 'on')
             | selectattr('entity_id', 'in', updates_pending)
             | rejectattr('entity_id', 'in', input_update_exclusions)
+            | rejectattr('entity_id', 'in', attempted_updates)
             | map(attribute='entity_id')
             | list
             }}
@@ -2119,6 +2134,7 @@ action:
             | selectattr('state', 'eq', 'on')
             | selectattr('entity_id', 'in', updates_pending)
             | rejectattr('entity_id', 'in', input_update_exclusions)
+            | rejectattr('entity_id', 'in', attempted_updates)
             | map(attribute='entity_id')
             | list
             }}
@@ -2131,6 +2147,7 @@ action:
               | selectattr('state', 'eq', 'on')
               | selectattr('entity_id', 'in', updates_pending)
               | rejectattr('entity_id', 'in', input_update_exclusions)
+              | rejectattr('entity_id', 'in', attempted_updates)
               | list
               | count
               | int(0)
