@@ -69,9 +69,14 @@ Select it if you want to trigger an additional backup before starting the update
 ### Force Home Assistant host to restart if required by any update? <sup>*Required</sup>
 This won't affect updates where a restart is automatic, but for updates requiring a manual restart (quite common on HACS) this blueprint can automatically force a restart by the end of the updates.
 
-### Schedule entity <sup>*Required</sup>
-You can create an Schedule under Settings > Devices & Services > Helpers.
-- The schedule windows will define when an update will start. It is possible that a backup, an update or a restart process finishes after the schedule window, but new updates won't stars outside the schedule windows.
+### Schedule entities <sup>*Required</sup>
+
+One or more entities defining when updates are allowed to start. Updates can start while **any** of the selected entities is `on`.
+
+- Supported domains: `schedule`, `input_boolean`, `binary_sensor` and `switch`.
+- You can create a Schedule under Settings > Devices & Services > Helpers.
+- A toggle helper or a switch can be added to start the update process on demand (e.g. right after installing a new integration). Turn it off afterwards, as it acts as an open schedule window while `on`.
+- The schedule windows will define when an update will start. It is possible that a backup, an update or a restart process finishes after the schedule window, but new updates won't start outside the schedule windows.
 - For more information about Helpers, please refer to the [Home Assistant docs](https://www.home-assistant.io/integrations/schedule).
 
 ### Earliest day in the month to update Home Assistant <sup>*Required</sup>

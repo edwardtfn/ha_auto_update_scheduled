@@ -60,10 +60,18 @@ blueprint:
       collapsed: false
       input:
         schedule_entity:
-          name: Schedule entity
+          name: Schedule entities
           description: >
+            One or more entities defining when updates are allowed to start.
+            Updates can start while **any** of the selected entities is `on`.
+
+            Supported domains: `schedule`, `input_boolean`, `binary_sensor` and `switch`.
             You can create a [Schedule](https://www.home-assistant.io/integrations/schedule) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
+
+            A toggle helper or a switch can be added to start the update process on demand
+            (e.g. right after installing a new integration).
+            Turn it off afterwards, as it acts as an open schedule window while `on`.
 
             Note => The schedule windows will define when an update will start.
             It is possible that a backup, an update or a restart process finishes after the schedule window,
@@ -71,8 +79,13 @@ blueprint:
           default: []
           selector:
             entity:
-              multiple: false
-              domain: schedule
+              multiple: true
+              filter:
+                - domain:
+                    - schedule
+                    - input_boolean
+                    - binary_sensor
+                    - switch
 
         schedule_monthday_earliest:
           name: Earliest day in the month to run the update process
@@ -894,6 +907,7 @@ condition:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
           - condition: template
             value_template: >-
               {{
@@ -1346,6 +1360,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - variables:
           log_message: >
@@ -1393,6 +1408,7 @@ action:
       - condition: state
         entity_id: !input schedule_entity
         state: 'on'
+        match: any  # Any of the selected entities being on is enough
     then:
       - action: input_boolean.turn_on
         target:
@@ -1409,6 +1425,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
       - '{{ not is_resume_after_restart }}'
     then:
       - variables:
@@ -1437,6 +1454,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - variables:
           input_run_during_backup: !input run_during_backup
@@ -1516,6 +1534,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
       - '{{ not is_resume_after_restart }}'
     then:
       - *recalc_update_list
@@ -1832,6 +1851,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - *recalc_update_list
       - variables:
@@ -1856,6 +1876,7 @@ action:
                 - condition: state
                   entity_id: !input schedule_entity
                   state: "on"
+                  match: any  # Any of the selected entities being on is enough
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -1960,6 +1981,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - *recalc_update_list
       - variables:
@@ -1985,6 +2007,7 @@ action:
                 - condition: state
                   entity_id: !input schedule_entity
                   state: "on"
+                  match: any  # Any of the selected entities being on is enough
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -2022,6 +2045,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - *recalc_update_list
       - variables:
@@ -2046,6 +2070,7 @@ action:
                 - condition: state
                   entity_id: !input schedule_entity
                   state: "on"
+                  match: any  # Any of the selected entities being on is enough
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -2086,6 +2111,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - *recalc_update_list
       - variables:
@@ -2110,6 +2136,7 @@ action:
                 - condition: state
                   entity_id: !input schedule_entity
                   state: "on"
+                  match: any  # Any of the selected entities being on is enough
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -2151,6 +2178,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - *recalc_update_list
       - variables:
@@ -2227,6 +2255,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - *recalc_update_list
       - variables:
@@ -2281,6 +2310,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
       - alias: Wait pending operations  # Wait for any pending operations to complete
         continue_on_error: true
         wait_template: |
@@ -2428,6 +2458,7 @@ action:
           - condition: state
             entity_id: !input schedule_entity
             state: 'on'
+            match: any  # Any of the selected entities being on is enough
     then:
       - variables:
           log_message: "Done!"
