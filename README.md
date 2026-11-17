@@ -26,7 +26,9 @@ All the standard add-ons of Home Assistant supports to set “Auto-update” thr
 ### HACS update
 At this moment (2022-09-10), HACS updates are not released, but it is an experimental feature, so, if you enable HACS to use its experimental features, this blueprint will include HACS updates automatically.
 ### Schedule helper
-You will need a [schedule helper](https://www.home-assistant.io/blog/2022/09/07/release-20229/#new-helper-weekly-schedule) indicating the time slots where the updates could start.
+You will need at least one entity indicating when the updates could start,
+usually a [schedule helper](https://www.home-assistant.io/blog/2022/09/07/release-20229/#new-helper-weekly-schedule) with the allowed time slots.
+A toggle helper, a binary sensor or a switch can be used instead of (or together with) a schedule, e.g. to start updates on demand.
 - Schedule documentation: [https://www.home-assistant.io/integrations/schedule](https://www.home-assistant.io/integrations/schedule)
 
 The updates will be installed one by one, while inside the schedule windows. It’s not guaranteed that the update will finish inside the schedule windows.
@@ -76,6 +78,7 @@ One or more entities defining when updates are allowed to start. Updates can sta
 - Supported domains: `schedule`, `input_boolean`, `binary_sensor` and `switch`.
 - You can create a Schedule under Settings > Devices & Services > Helpers.
 - A toggle helper or a switch can be added to start the update process on demand (e.g. right after installing a new integration). Turn it off afterwards, as it acts as an open schedule window while `on`.
+  If the automation is already running when it is turned on, the request is ignored; turn it off and on again once that run finishes.
 - The schedule windows will define when an update will start. It is possible that a backup, an update or a restart process finishes after the schedule window, but new updates won't start outside the schedule windows.
 - For more information about Helpers, please refer to the [Home Assistant docs](https://www.home-assistant.io/integrations/schedule).
 
