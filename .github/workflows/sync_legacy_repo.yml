@@ -1,0 +1,32 @@
+---
+# Asks edwardtfn/HomeAssistant-Config to refresh its legacy copy of the
+# blueprint, so users who imported it from there keep receiving updates.
+name: Sync legacy repository
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - auto_update_scheduled.yaml
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Trigger sync on edwardtfn/HomeAssistant-Config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send repository dispatch
+        env:
+          GH_TOKEN: ${{ secrets.LEGACY_REPO_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::warning::LEGACY_REPO_DISPATCH_TOKEN is not set; skipping (the legacy repo's daily schedule will sync)."
+            exit 0
+          fi
+          gh api repos/edwardtfn/HomeAssistant-Config/dispatches \
+            -f event_type=sync-auto-update-scheduled
+...
