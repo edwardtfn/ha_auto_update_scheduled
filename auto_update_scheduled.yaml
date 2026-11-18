@@ -60,24 +60,33 @@ blueprint:
       collapsed: false
       input:
         schedule_entity:
-          name: Schedule entities
+          name: Schedule entity
           description: >
-            One or more entities defining when updates are allowed to start.
-            Updates can start while **any** of the selected entities is `on`.
-
-            Supported domains: `schedule`, `input_boolean`, `binary_sensor` and `switch`.
             You can create a [Schedule](https://www.home-assistant.io/integrations/schedule) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=schedule).
-
-            A toggle helper or a switch can be added to start the update process on demand
-            (e.g. right after installing a new integration).
-            Turn it off afterwards, as it acts as an open schedule window while `on`.
-            If the automation is already running when it is turned on, the request is ignored;
-            turn it off and on again once that run finishes.
 
             Note => The schedule windows will define when an update will start.
             It is possible that a backup, an update or a restart process finishes after the schedule window,
             but new updates won't start outside the schedule windows.
+          default: []
+          selector:
+            entity:
+              multiple: false
+              domain: schedule
+
+        schedule_entities_additional:
+          name: Additional schedule entities (optional)
+          description: >
+            Other entities that also open a schedule window while `on`.
+            Updates can start while the schedule entity **or any** of these entities is `on`.
+
+            Supported domains: `schedule`, `input_boolean`, `binary_sensor` and `switch`.
+
+            A toggle helper or a switch can be used to start the update process on demand
+            (e.g. right after installing a new integration).
+            Turn it off afterwards, as it acts as an open schedule window while `on`.
+            If the automation is already running when it is turned on, the request is ignored;
+            turn it off and on again once that run finishes.
           default: []
           selector:
             entity:
@@ -830,11 +839,22 @@ trigger_variables:
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
   input_update_process_started_entity: !input update_process_started_entity
   update_out_of_schedule: !input update_out_of_schedule
+  input_schedule_entity: !input schedule_entity
+  input_schedule_entities_additional: !input schedule_entities_additional
+  # All entities opening a schedule window (any of them `on` is enough)
+  schedule_entities: >-
+    {% set main = [input_schedule_entity] if input_schedule_entity is string else input_schedule_entity %}
+    {% set additional = [input_schedule_entities_additional] if input_schedule_entities_additional is string
+       else input_schedule_entities_additional %}
+    {{ (main + additional) | reject('eq', '') | unique | list }}
 
 trigger:
   - id: HA Schedule based
     platform: state
     entity_id: !input schedule_entity
+  - id: HA Schedule based
+    platform: state
+    entity_id: !input schedule_entities_additional
   - id: HA Start
     platform: homeassistant
     event: start
@@ -906,10 +926,9 @@ condition:
               }}
       - condition: and
         conditions:
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - &schedule_window_open  # Any schedule entity is on
+            condition: template
+            value_template: "{{ schedule_entities | select('is_state', 'on') | list | count > 0 }}"
           - condition: template
             value_template: >-
               {{
@@ -1359,10 +1378,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - variables:
           log_message: >
@@ -1407,10 +1423,7 @@ action:
     if:
       - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
       - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
-      - condition: state
-        entity_id: !input schedule_entity
-        state: 'on'
-        match: any  # Any of the selected entities being on is enough
+      - *schedule_window_open
     then:
       - action: input_boolean.turn_on
         target:
@@ -1424,10 +1437,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
       - '{{ not is_resume_after_restart }}'
     then:
       - variables:
@@ -1453,10 +1463,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - variables:
           input_run_during_backup: !input run_during_backup
@@ -1533,10 +1540,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
       - '{{ not is_resume_after_restart }}'
     then:
       - *recalc_update_list
@@ -1850,10 +1854,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - *recalc_update_list
       - variables:
@@ -1875,10 +1876,7 @@ action:
               conditions:
                 - condition: template
                   value_template: '{{ is_out_of_schedule_mode }}'
-                - condition: state
-                  entity_id: !input schedule_entity
-                  state: "on"
-                  match: any  # Any of the selected entities being on is enough
+                - *schedule_window_open
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -1980,10 +1978,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - *recalc_update_list
       - variables:
@@ -2006,10 +2001,7 @@ action:
               conditions:
                 - condition: template
                   value_template: '{{ is_out_of_schedule_mode }}'
-                - condition: state
-                  entity_id: !input schedule_entity
-                  state: "on"
-                  match: any  # Any of the selected entities being on is enough
+                - *schedule_window_open
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -2044,10 +2036,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - *recalc_update_list
       - variables:
@@ -2069,10 +2058,7 @@ action:
               conditions:
                 - condition: template
                   value_template: '{{ is_out_of_schedule_mode }}'
-                - condition: state
-                  entity_id: !input schedule_entity
-                  state: "on"
-                  match: any  # Any of the selected entities being on is enough
+                - *schedule_window_open
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -2110,10 +2096,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - *recalc_update_list
       - variables:
@@ -2135,10 +2118,7 @@ action:
               conditions:
                 - condition: template
                   value_template: '{{ is_out_of_schedule_mode }}'
-                - condition: state
-                  entity_id: !input schedule_entity
-                  state: "on"
-                  match: any  # Any of the selected entities being on is enough
+                - *schedule_window_open
             - condition: template
               value_template: >
                 {{ ( states.update
@@ -2177,10 +2157,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - *recalc_update_list
       - variables:
@@ -2254,10 +2231,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - *recalc_update_list
       - variables:
@@ -2309,10 +2283,7 @@ action:
             value_template: '{{ is_out_of_schedule_mode }}'
           - condition: template
             value_template: '{{ installed_updates | count > 0 }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
       - alias: Wait pending operations  # Wait for any pending operations to complete
         continue_on_error: true
         wait_template: |
@@ -2457,10 +2428,7 @@ action:
         conditions:
           - condition: template
             value_template: '{{ is_out_of_schedule_mode }}'
-          - condition: state
-            entity_id: !input schedule_entity
-            state: 'on'
-            match: any  # Any of the selected entities being on is enough
+          - *schedule_window_open
     then:
       - variables:
           log_message: "Done!"
