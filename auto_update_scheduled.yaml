@@ -839,14 +839,6 @@ trigger_variables:
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
   input_update_process_started_entity: !input update_process_started_entity
   update_out_of_schedule: !input update_out_of_schedule
-  input_schedule_entity: !input schedule_entity
-  input_schedule_entities_additional: !input schedule_entities_additional
-  # All entities opening a schedule window (any of them `on` is enough)
-  schedule_entities: >-
-    {% set main = [input_schedule_entity] if input_schedule_entity is string else input_schedule_entity %}
-    {% set additional = [input_schedule_entities_additional] if input_schedule_entities_additional is string
-       else input_schedule_entities_additional %}
-    {{ (main + additional) | reject('eq', '') | unique | list }}
 
 trigger:
   - id: HA Schedule based
@@ -926,9 +918,17 @@ condition:
               }}
       - condition: and
         conditions:
-          - &schedule_window_open  # Any schedule entity is on
-            condition: template
-            value_template: "{{ schedule_entities | select('is_state', 'on') | list | count > 0 }}"
+          - &schedule_window_open  # Schedule entity or any additional schedule entity is on
+            condition: or
+            conditions:
+              - condition: state
+                entity_id: !input schedule_entity
+                state: 'on'
+                match: any  # Empty (unset) input never matches
+              - condition: state
+                entity_id: !input schedule_entities_additional
+                state: 'on'
+                match: any  # Empty list never matches
           - condition: template
             value_template: >-
               {{
