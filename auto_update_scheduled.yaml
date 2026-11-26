@@ -791,12 +791,13 @@ blueprint:
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
             This entity is for inner workings of this automation.
-            It is turned on while an update process is running and turned off when it finishes.
-
-            - It saves you from getting multiple backups in the same update window.
+            It is turned on when the updates start (after the backup)
+            and turned off when they finish (before the post-update actions).
 
             - It allows the update process to resume after Home Assistant restarts during the updates,
-              including running the post-update actions by the end of the resumed process.
+              without a new backup and including the post-update actions by the end of the resumed process.
+
+            - Use a dedicated helper for each automation based on this blueprint.
           default: []
           selector:
             entity:
@@ -1431,16 +1432,6 @@ action:
           log_message: "{{ friendly_name }} started but there's nothing to update"
       - *logbook_update
 
-  - alias: Set ON helper flag
-    if:
-      - '{{ update_process_started_entity_id | length > 0 }}'
-      - *schedule_window_open
-    then:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: !input update_process_started_entity
-        continue_on_error: true
-
   - alias: Pre-update actions
     if:
       - '{{ is_there_anything_to_update }}'
@@ -1651,12 +1642,6 @@ action:
                   is_state(update_process_started_entity_id, "off")
                 }}
             then:
-              - if: '{{ update_process_started_entity_id | length > 0 }}'
-                then:
-                  - action: input_boolean.turn_on
-                    target:
-                      entity_id: '{{ update_process_started_entity_id }}'
-                    continue_on_error: true
               - variables:
                   log_message: "Backing up Home Assistant"
               - *logbook_update
@@ -1856,6 +1841,20 @@ action:
                       - alias: "Run custom backup actions (fallback wait done)"
                         continue_on_error: true
                         sequence: !input notification_action_backup
+
+  - alias: Set ON helper flag  # Updates are starting: from here on, a restart resumes this run
+    if:
+      - '{{ update_process_started_entity_id | length > 0 }}'
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: '{{ is_out_of_schedule_mode }}'
+          - *schedule_window_open
+    then:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: !input update_process_started_entity
+        continue_on_error: true
 
   - alias: Update generic
     if:
@@ -2408,6 +2407,15 @@ action:
                 continue_on_error: true
                 action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
 
+  - alias: Set OFF helper flag  # Before the post-update actions, so a restart during them won't repeat them
+    if:
+      - '{{ update_process_started_entity_id | length > 0 }}'
+    then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: !input update_process_started_entity
+        continue_on_error: true
+
   - alias: Post-update actions
     sequence:
       - variables:
@@ -2420,15 +2428,6 @@ action:
       - alias: "Run post-update actions"
         continue_on_error: true
         sequence: !input actions_pos_update
-
-  - alias: Set OFF helper flag
-    if:
-      - '{{ update_process_started_entity_id | length > 0 }}'
-    then:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: !input update_process_started_entity
-        continue_on_error: true
 
   - alias: Done  # All done!
     if:
