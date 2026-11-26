@@ -556,9 +556,10 @@ blueprint:
               - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
 
             **IMPORTANT** => Some updates will automatically restart Home Assistant,
-            causing the automation to interrupt before finishing, preventing the pos-updates actions to be executed.
-            If you have critical actions to run after an update,
-            consider including also in another automation based on Home Assistant start.
+            causing the automation to interrupt before finishing.
+            Set the "Update Process Started" toggle entity to resume the update process after the restart,
+            and run these actions by the end of it.
+            Without it, the post-update actions are not executed after a restart.
           default: []
           selector:
             action: {}
@@ -789,10 +790,13 @@ blueprint:
             You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
-            This entity will be used to determine if we still have to do a backup
-            on automation start - so it is for inner workings of this automation.
+            This entity is for inner workings of this automation.
+            It is turned on while an update process is running and turned off when it finishes.
 
-            This saves you from getting multiple backups in the same update window.
+            - It saves you from getting multiple backups in the same update window.
+
+            - It allows the update process to resume after Home Assistant restarts during the updates,
+              including running the post-update actions by the end of the resumed process.
           default: []
           selector:
             entity:
