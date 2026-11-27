@@ -22,7 +22,7 @@
 ####################################################################################################
 ---
 blueprint:
-  name: Home Assistant Auto-update on a schedule base v2026.11.1
+  name: Home Assistant Auto-update on a schedule base v2026.11.2
   author: Edward Firmo (https://github.com/edwardtfn)
   homeassistant:
     min_version: 2025.8.0
@@ -31,7 +31,7 @@ blueprint:
 
     Update Home Assistant automatically when a new update is available.
 
-    ## v2026.11.1
+    ## v2026.11.2
 
     ## Attention:
 
@@ -555,10 +555,15 @@ blueprint:
               - `{{ updates_list }}` - contains the list of updates when the automation started.
               - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
 
-            **IMPORTANT** => Some updates will automatically restart Home Assistant,
-            causing the automation to interrupt before finishing, preventing the pos-updates actions to be executed.
-            If you have critical actions to run after an update,
-            consider including also in another automation based on Home Assistant start.
+            These actions only run when at least one update was installed.
+
+            When this automation forces a restart, they run after the restart if the
+            "Update Process Started" toggle entity is set, or right before the restart otherwise.
+
+            **IMPORTANT** => Some updates (e.g. Core, OS) restart Home Assistant by themselves,
+            interrupting the automation before the post-update actions are reached.
+            Set the "Update Process Started" toggle entity so the automation resumes after the restart
+            and runs the post-update actions then.
           default: []
           selector:
             action: {}
@@ -888,13 +893,14 @@ trigger:
   - id: Backup sensor recovered
     platform: state
     entity_id: !input run_during_backup
+    not_from:  # Ignore the sensor becoming available on Home Assistant start
+      - "unavailable"
+      - "unknown"
     to: "idle"
 
 condition:
   - condition: or
     conditions:
-      - condition: trigger
-        id: "Backup sensor recovered"
       - condition: trigger
         id: "Out of schedule"
       - condition: and
@@ -905,6 +911,8 @@ condition:
                 id: "HA Start"
               - condition: trigger
                 id: "Automations reloaded"
+              - condition: trigger
+                id: "Backup sensor recovered"
           - condition: template
             value_template: >-
               {{
@@ -1009,7 +1017,7 @@ variables:
     {{
       trigger.id == "Out of schedule" or
       (
-        (trigger.id == "HA Start" or trigger.id == "Automations reloaded") and
+        trigger.id in ["HA Start", "Automations reloaded", "Backup sensor recovered"] and
         (
           states.update
           | default([])
@@ -1054,6 +1062,8 @@ variables:
   # Update entities successfully installed in this run.
   # Allows the restart step to run after the schedule window closes only when this run installed something.
   installed_updates: []
+  # Set once the post-update actions ran in this run, so they never run twice.
+  post_update_actions_done: false
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -2394,22 +2404,43 @@ action:
                 delay:
                   seconds: 15
 
+              - alias: Post-update actions before restart  # Only when the run can't resume after the restart
+                if:
+                  - '{{ installed_updates | count > 0 }}'
+                  - '{{ not post_update_actions_done }}'
+                  - >-
+                    {{
+                      input_update_process_started_entity | default([]) | count < 1 or
+                      not is_state(input_update_process_started_entity | first | default(""), "on")
+                    }}
+                then:
+                  - &run_post_update_actions
+                    sequence:
+                      - variables:
+                          input_actions_pos_update: !input actions_pos_update
+                      - condition: '{{ input_actions_pos_update is sequence }}'
+                      - variables:
+                          log_message: "Running post-update actions"
+                      - *logbook_update
+
+                      - alias: "Run post-update actions"
+                        continue_on_error: true
+                        sequence: !input actions_pos_update
+                  - variables:
+                      post_update_actions_done: true
+
               - alias: "Restart - Call reboot service"
                 continue_on_error: true
                 action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
 
-  - alias: Post-update actions
-    sequence:
+  - alias: Post-update actions  # Only after something was installed, or when resuming after a restart
+    if:
+      - '{{ not post_update_actions_done }}'
+      - '{{ installed_updates | count > 0 or is_resume_after_restart }}'
+    then:
+      - *run_post_update_actions
       - variables:
-          input_actions_pos_update: !input actions_pos_update
-      - condition: '{{ input_actions_pos_update is sequence }}'
-      - variables:
-          log_message: "Running post-update actions"
-      - *logbook_update
-
-      - alias: "Run post-update actions"
-        continue_on_error: true
-        sequence: !input actions_pos_update
+          post_update_actions_done: true
 
   - alias: Set OFF helper flag
     if:
