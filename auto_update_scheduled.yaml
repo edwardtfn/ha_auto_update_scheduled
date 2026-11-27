@@ -22,7 +22,7 @@
 ####################################################################################################
 ---
 blueprint:
-  name: Home Assistant Auto-update on a schedule base v2026.11.1
+  name: Home Assistant Auto-update on a schedule base v2026.11.2
   author: Edward Firmo (https://github.com/edwardtfn)
   homeassistant:
     min_version: 2025.8.0
@@ -31,7 +31,7 @@ blueprint:
 
     Update Home Assistant automatically when a new update is available.
 
-    ## v2026.11.1
+    ## v2026.11.2
 
     ## Attention:
 
@@ -555,10 +555,16 @@ blueprint:
               - `{{ updates_list }}` - contains the list of updates when the automation started.
               - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
 
+            These actions only run when at least one update was installed.
+
+            When this automation forces a restart, they run after the restart if the
+            "Update Process Started" toggle entity is set, or right before the restart otherwise.
+
             **IMPORTANT** => Some updates will automatically restart Home Assistant,
-            causing the automation to interrupt before finishing, preventing the pos-updates actions to be executed.
-            If you have critical actions to run after an update,
-            consider including also in another automation based on Home Assistant start.
+            causing the automation to interrupt before finishing.
+            Set the "Update Process Started" toggle entity to resume the update process after the restart,
+            and run these actions by the end of it.
+            Without it, the post-update actions are not executed after a restart.
           default: []
           selector:
             action: {}
@@ -789,10 +795,14 @@ blueprint:
             You can create a [Toggle Helper](https://www.home-assistant.io/integrations/input_boolean) under
             [Settings > Devices & Services > Helpers](https://my.home-assistant.io/redirect/config_flow_start/?domain=input_boolean).
 
-            This entity will be used to determine if we still have to do a backup
-            on automation start - so it is for inner workings of this automation.
+            This entity is for inner workings of this automation.
+            It is turned on when the updates start (after the backup)
+            and turned off when they finish (before the post-update actions).
 
-            This saves you from getting multiple backups in the same update window.
+            - It allows the update process to resume after Home Assistant restarts during the updates,
+              without a new backup and including the post-update actions by the end of the resumed process.
+
+            - Use a dedicated helper for each automation based on this blueprint.
           default: []
           selector:
             entity:
@@ -838,6 +848,14 @@ trigger_variables:
   input_update_inclusion_entity_list: !input update_inclusion_entity_list
   input_update_inclusion_entity_searchfilter: !input update_inclusion_entity_searchfilter
   input_update_process_started_entity: !input update_process_started_entity
+  # The entity selector returns a string (or [] when unset); normalize it to a single entity id
+  update_process_started_entity_id: >-
+    {{
+      ([input_update_process_started_entity]
+        if input_update_process_started_entity is string
+        else input_update_process_started_entity | default([]))
+      | first | default('')
+    }}
   update_out_of_schedule: !input update_out_of_schedule
 
 trigger:
@@ -894,8 +912,6 @@ condition:
   - condition: or
     conditions:
       - condition: trigger
-        id: "Backup sensor recovered"
-      - condition: trigger
         id: "Out of schedule"
       - condition: and
         conditions:
@@ -905,6 +921,8 @@ condition:
                 id: "HA Start"
               - condition: trigger
                 id: "Automations reloaded"
+              - condition: trigger
+                id: "Backup sensor recovered"
           - condition: template
             value_template: >-
               {{
@@ -943,7 +961,7 @@ condition:
         conditions:
           - condition: trigger
             id: "HA Start"
-          - '{{ input_update_process_started_entity | default([]) | count == 1 }}'
+          - '{{ update_process_started_entity_id | length > 0 }}'
           - condition: state
             entity_id: !input update_process_started_entity
             state: "on"
@@ -1002,14 +1020,14 @@ variables:
     {% endfor %}
   is_resume_after_restart: >
     {{
-      input_update_process_started_entity | default([]) | count == 1 and
-      is_state(input_update_process_started_entity | first | default(""), "on")
+      update_process_started_entity_id | length > 0 and
+      is_state(update_process_started_entity_id, "on")
     }}
   is_out_of_schedule_mode: >
     {{
       trigger.id == "Out of schedule" or
       (
-        (trigger.id == "HA Start" or trigger.id == "Automations reloaded") and
+        trigger.id in ["HA Start", "Automations reloaded", "Backup sensor recovered"] and
         (
           states.update
           | default([])
@@ -1054,6 +1072,8 @@ variables:
   # Update entities successfully installed in this run.
   # Allows the restart step to run after the schedule window closes only when this run installed something.
   installed_updates: []
+  # Set once the post-update actions ran in this run, so they never run twice.
+  post_update_actions_done: false
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -1419,17 +1439,6 @@ action:
           log_message: "{{ friendly_name }} started but there's nothing to update"
       - *logbook_update
 
-  - alias: Set ON helper flag
-    if:
-      - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
-      - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
-      - *schedule_window_open
-    then:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: !input update_process_started_entity
-        continue_on_error: true
-
   - alias: Pre-update actions
     if:
       - '{{ is_there_anything_to_update }}'
@@ -1469,6 +1478,15 @@ action:
           input_run_during_backup: !input run_during_backup
           input_backup_timeout_minutes: !input backup_timeout
           input_backup_timeout: '{{ input_backup_timeout_minutes | int(60) }}'
+      - alias: Wait for the backup state sensor to load  # It may still be unavailable right after a restart
+        if:
+          - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
+          - '{{ states(input_run_during_backup) in ["unknown", "unavailable"] }}'
+        then:
+          - wait_template: '{{ states(input_run_during_backup) not in ["unknown", "unavailable"] }}'
+            continue_on_timeout: true
+            timeout:
+              minutes: 2
       - if:
           - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
           - '{{ not is_state(input_run_during_backup, "idle") }}'
@@ -1494,8 +1512,7 @@ action:
               - &reset_helper_flag
                 alias: "Reset helper flag before stopping"
                 if:
-                  - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
-                  - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
+                  - '{{ update_process_started_entity_id | length > 0 }}'
                 then:
                   - action: input_boolean.turn_off
                     target:
@@ -1637,16 +1654,10 @@ action:
               - '{{ needs_backup }}'
               - >-
                 {{
-                  input_update_process_started_entity | default([]) | count < 1 or
-                  is_state(input_update_process_started_entity | first | default(""), "off")
+                  update_process_started_entity_id | length < 1 or
+                  is_state(update_process_started_entity_id, "off")
                 }}
             then:
-              - if: '{{ input_update_process_started_entity | default([]) | count > 0 }}'
-                then:
-                  - action: input_boolean.turn_on
-                    target:
-                      entity_id: "{{ input_update_process_started_entity }}"
-                    continue_on_error: true
               - variables:
                   log_message: "Backing up Home Assistant"
               - *logbook_update
@@ -1846,6 +1857,21 @@ action:
                       - alias: "Run custom backup actions (fallback wait done)"
                         continue_on_error: true
                         sequence: !input notification_action_backup
+
+  - alias: Set ON helper flag  # Updates are starting: from here on, a restart resumes this run
+    if:
+      - '{{ update_process_started_entity_id | length > 0 }}'
+      - '{{ is_there_anything_to_update }}'
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: '{{ is_out_of_schedule_mode }}'
+          - *schedule_window_open
+    then:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: !input update_process_started_entity
+        continue_on_error: true
 
   - alias: Update generic
     if:
@@ -2394,32 +2420,52 @@ action:
                 delay:
                   seconds: 15
 
+              - alias: Post-update actions before restart  # Only when the run won't resume after the restart
+                if:
+                  - '{{ installed_updates | count > 0 }}'
+                  - '{{ not post_update_actions_done }}'
+                  - >-
+                    {{
+                      update_process_started_entity_id | length < 1 or
+                      not is_state(update_process_started_entity_id, "on")
+                    }}
+                then:
+                  - &run_post_update_actions
+                    sequence:
+                      - variables:
+                          input_actions_pos_update: !input actions_pos_update
+                      - condition: '{{ input_actions_pos_update is sequence }}'
+                      - variables:
+                          log_message: "Running post-update actions"
+                      - *logbook_update
+
+                      - alias: "Run post-update actions"
+                        continue_on_error: true
+                        sequence: !input actions_pos_update
+                  - variables:
+                      post_update_actions_done: true
+
               - alias: "Restart - Call reboot service"
                 continue_on_error: true
                 action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
 
-  - alias: Post-update actions
-    sequence:
-      - variables:
-          input_actions_pos_update: !input actions_pos_update
-      - condition: '{{ input_actions_pos_update is sequence }}'
-      - variables:
-          log_message: "Running post-update actions"
-      - *logbook_update
-
-      - alias: "Run post-update actions"
-        continue_on_error: true
-        sequence: !input actions_pos_update
-
-  - alias: Set OFF helper flag
+  - alias: Set OFF helper flag  # Before the post-update actions, so a restart during them won't repeat them
     if:
-      - '{{ input_update_process_started_entity | default([]) | count > 0 }}'
-      - '{{ input_update_process_started_entity[0] | string | length > 0 }}'
+      - '{{ update_process_started_entity_id | length > 0 }}'
     then:
       - action: input_boolean.turn_off
         target:
           entity_id: !input update_process_started_entity
         continue_on_error: true
+
+  - alias: Post-update actions  # Only after something was installed, or when resuming after a restart
+    if:
+      - '{{ not post_update_actions_done }}'
+      - '{{ installed_updates | count > 0 or is_resume_after_restart }}'
+    then:
+      - *run_post_update_actions
+      - variables:
+          post_update_actions_done: true
 
   - alias: Done  # All done!
     if:
