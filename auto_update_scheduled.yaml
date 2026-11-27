@@ -1054,6 +1054,9 @@ variables:
   # Update entities successfully installed in this run.
   # Allows the restart step to run after the schedule window closes only when this run installed something.
   installed_updates: []
+  # One persistent notification per automation, replaced on each run and dismissed once fixed.
+  backup_misconfigured_notification_id: >-
+    auto_update_scheduled_{{ this.entity_id | replace(".", "_") }}_backup_misconfigured
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -1561,6 +1564,20 @@ action:
               ).total_seconds()
             }}
 
+      - alias: Dismiss the backup misconfigured notification  # Backup config is valid (no-op if not raised)
+        if:
+          - >-
+            {{
+              input_backup_mode != "auto" or
+              (input_run_during_backup is string and input_run_during_backup | length > 0 and
+               input_last_backup_timestamp_entity is string and input_last_backup_timestamp_entity | length > 0)
+            }}
+        then:
+          - continue_on_error: true
+            action: persistent_notification.dismiss
+            data:
+              notification_id: "{{ backup_misconfigured_notification_id }}"
+
       - alias: Backup section
         if:
           - '{{ input_backup_mode != "never" }}'
@@ -1579,6 +1596,19 @@ action:
                     ERROR: Auto backup mode requires both the Backup state sensor and
                     Last successful automatic backup sensor to be configured. Stopping.
               - *logbook_update
+              - alias: "Raise a persistent notification (backup misconfigured)"  # Regardless of the selected notifications
+                continue_on_error: true
+                action: persistent_notification.create
+                data:
+                  notification_id: "{{ backup_misconfigured_notification_id }}"
+                  title: "{{ friendly_name }}: backup misconfigured"
+                  message: >-
+                    The backup mode is set to "When no recent backup is detected", which requires both the
+                    **Backup state sensor** and the **Last successful automatic backup sensor**.
+                    The update process was stopped before any update.
+
+                    Set both sensors in the automation, or choose another backup mode.
+                    This notification is dismissed automatically on the next run after the fix.
               - if: '{{ "errors" in input_notification_select_notifications }}'
                 then:
                   - *send_notification
