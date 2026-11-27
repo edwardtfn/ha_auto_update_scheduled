@@ -1054,10 +1054,29 @@ variables:
   # Update entities successfully installed in this run.
   # Allows the restart step to run after the schedule window closes only when this run installed something.
   installed_updates: []
+  # Backup inputs needed before the backup section, to dismiss the misconfiguration notification.
+  input_backup_mode_cfg: !input backup_mode
+  input_run_during_backup_cfg: !input run_during_backup
+  input_last_backup_timestamp_entity_cfg: !input last_backup_timestamp_entity
   # One persistent notification per automation, replaced on each run and dismissed once fixed.
+  # Based on the automation's unique id, so it survives an entity id rename.
   backup_misconfigured_notification_id: >-
-    auto_update_scheduled_{{ this.entity_id | replace(".", "_") }}_backup_misconfigured
+    auto_update_scheduled_{{ this.attributes.id | default(this.entity_id, true) | slugify }}_backup_misconfigured
 action:
+  - alias: Dismiss the backup misconfigured notification  # Backup config is valid (no-op if not raised)
+    if:
+      - >-
+        {{
+          input_backup_mode_cfg != "auto" or
+          (input_run_during_backup_cfg is string and input_run_during_backup_cfg | length > 0 and
+           input_last_backup_timestamp_entity_cfg is string and input_last_backup_timestamp_entity_cfg | length > 0)
+        }}
+    then:
+      - continue_on_error: true
+        action: persistent_notification.dismiss
+        data:
+          notification_id: "{{ backup_misconfigured_notification_id }}"
+
   - alias: Refresh update entities
     action: homeassistant.update_entity
     data:
@@ -1563,20 +1582,6 @@ action:
                 seconds=temp_max_backup_age.seconds
               ).total_seconds()
             }}
-
-      - alias: Dismiss the backup misconfigured notification  # Backup config is valid (no-op if not raised)
-        if:
-          - >-
-            {{
-              input_backup_mode != "auto" or
-              (input_run_during_backup is string and input_run_during_backup | length > 0 and
-               input_last_backup_timestamp_entity is string and input_last_backup_timestamp_entity | length > 0)
-            }}
-        then:
-          - continue_on_error: true
-            action: persistent_notification.dismiss
-            data:
-              notification_id: "{{ backup_misconfigured_notification_id }}"
 
       - alias: Backup section
         if:
