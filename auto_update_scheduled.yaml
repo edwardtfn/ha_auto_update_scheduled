@@ -2368,16 +2368,6 @@ action:
           - if: '{{ has_invalid_config or has_check_config_notification }}'
             then:
               - variables:
-                  log_message: 'Running pre-restart actions...'
-              - *logbook_update
-              - if: '{{ "restart" in input_notification_select_notifications }}'
-                then:
-                  - *send_notification
-
-              - alias: "Run pre-restart actions"
-                continue_on_error: true
-                sequence: !input actions_pre_restart
-              - variables:
                   log_message: >
                     Skipping restart process due to notifications of invalid configurations:
 
@@ -2398,6 +2388,13 @@ action:
               - if: '{{ "restart" in input_notification_select_notifications }}'
                 then:
                   - *send_notification
+
+              - variables:
+                  log_message: 'Running pre-restart actions...'
+              - *logbook_update
+              - alias: "Run pre-restart actions"  # Only when the restart is actually requested
+                continue_on_error: true
+                sequence: !input actions_pre_restart
 
               - alias: "Wait 15 seconds to deliver the notification message."
                 delay:
