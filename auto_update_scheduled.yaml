@@ -1074,7 +1074,49 @@ variables:
   installed_updates: []
   # Set once the post-update actions ran in this run, so they never run twice.
   post_update_actions_done: false
+  # Backup inputs needed before the backup section, to dismiss the misconfiguration notification.
+  input_backup_mode_cfg: !input backup_mode
+  input_run_during_backup_cfg: !input run_during_backup
+  input_last_backup_timestamp_entity_cfg: !input last_backup_timestamp_entity
+  # One persistent notification per automation, replaced on each run and dismissed once fixed.
+  # Based on the automation's unique id (unchanged, to keep distinct ids distinct), so it survives an entity id rename.
+  # Automations without a unique id fall back to the entity id, with a different prefix so both can't collide.
+  backup_misconfigured_notification_id: >-
+    {%- if this.attributes.id is defined and this.attributes.id | string | length > 0 -%}
+      auto_update_scheduled_id_{{ this.attributes.id }}_backup_misconfigured
+    {%- else -%}
+      auto_update_scheduled_entity_{{ this.entity_id }}_backup_misconfigured
+    {%- endif -%}
 action:
+  - alias: Backup misconfigured notification  # Raised or dismissed on every run, regardless of pending updates
+    if:
+      - >-
+        {{
+          input_backup_mode_cfg != "auto" or
+          (input_run_during_backup_cfg is string and input_run_during_backup_cfg | length > 0 and
+           input_last_backup_timestamp_entity_cfg is string and input_last_backup_timestamp_entity_cfg | length > 0)
+        }}
+    then:
+      - alias: "Dismiss the notification"  # Backup config is valid (no-op if not raised)
+        continue_on_error: true
+        action: persistent_notification.dismiss
+        data:
+          notification_id: "{{ backup_misconfigured_notification_id }}"
+    else:
+      - alias: "Raise the notification"  # Regardless of the selected notifications
+        continue_on_error: true
+        action: persistent_notification.create
+        data:
+          notification_id: "{{ backup_misconfigured_notification_id }}"
+          title: "{{ friendly_name }}: backup misconfigured"
+          message: >-
+            The backup mode is set to "When no recent backup is detected", which requires both the
+            **Backup state sensor** and the **Last successful automatic backup sensor**.
+            Until this is fixed, update runs stop before installing any update.
+
+            Set both sensors in the automation, or choose another backup mode.
+            This notification is dismissed automatically on the next run after the fix.
+
   - alias: Refresh update entities
     action: homeassistant.update_entity
     data:
@@ -2406,17 +2448,6 @@ action:
                 then:
                   - *send_notification
 
-              - variables:
-                  log_message: 'Running pre-restart actions...'
-              - *logbook_update
-              - alias: "Run pre-restart actions"  # Only when the restart is actually requested
-                continue_on_error: true
-                sequence: !input actions_pre_restart
-
-              - alias: "Wait 15 seconds to deliver the notification message."
-                delay:
-                  seconds: 15
-
               - alias: Post-update actions before restart  # Only when the run won't resume after the restart
                 if:
                   - '{{ installed_updates | count > 0 }}'
@@ -2441,6 +2472,17 @@ action:
                         sequence: !input actions_pos_update
                   - variables:
                       post_update_actions_done: true
+
+              - variables:
+                  log_message: 'Running pre-restart actions...'
+              - *logbook_update
+              - alias: "Run pre-restart actions"  # Only when the restart is actually requested
+                continue_on_error: true
+                sequence: !input actions_pre_restart
+
+              - alias: "Wait 15 seconds to deliver the notification message."
+                delay:
+                  seconds: 15
 
               - alias: "Restart - Call reboot service"
                 continue_on_error: true
