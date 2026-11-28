@@ -555,6 +555,11 @@ blueprint:
               - `{{ updates_list }}` - contains the list of updates when the automation started.
               - `{{ updates_pending }}` - contains the list of updates remaining to be updated.
 
+            These actions only run when at least one update was installed.
+
+            When this automation forces a restart, they run after the restart if the
+            "Update Process Started" toggle entity is set, or right before the restart otherwise.
+
             **IMPORTANT** => Some updates will automatically restart Home Assistant,
             causing the automation to interrupt before finishing.
             Set the "Update Process Started" toggle entity to resume the update process after the restart,
@@ -907,8 +912,6 @@ condition:
   - condition: or
     conditions:
       - condition: trigger
-        id: "Backup sensor recovered"
-      - condition: trigger
         id: "Out of schedule"
       - condition: and
         conditions:
@@ -918,6 +921,8 @@ condition:
                 id: "HA Start"
               - condition: trigger
                 id: "Automations reloaded"
+              - condition: trigger
+                id: "Backup sensor recovered"
           - condition: template
             value_template: >-
               {{
@@ -1022,7 +1027,7 @@ variables:
     {{
       trigger.id == "Out of schedule" or
       (
-        (trigger.id == "HA Start" or trigger.id == "Automations reloaded") and
+        trigger.id in ["HA Start", "Automations reloaded", "Backup sensor recovered"] and
         (
           states.update
           | default([])
@@ -1067,6 +1072,8 @@ variables:
   # Update entities successfully installed in this run.
   # Allows the restart step to run after the schedule window closes only when this run installed something.
   installed_updates: []
+  # Set once the post-update actions ran in this run, so they never run twice.
+  post_update_actions_done: false
 action:
   - alias: Refresh update entities
     action: homeassistant.update_entity
@@ -1471,6 +1478,15 @@ action:
           input_run_during_backup: !input run_during_backup
           input_backup_timeout_minutes: !input backup_timeout
           input_backup_timeout: '{{ input_backup_timeout_minutes | int(60) }}'
+      - alias: Wait for the backup state sensor to load  # It may still be unavailable right after a restart
+        if:
+          - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
+          - '{{ states(input_run_during_backup) in ["unknown", "unavailable"] }}'
+        then:
+          - wait_template: '{{ states(input_run_during_backup) not in ["unknown", "unavailable"] }}'
+            continue_on_timeout: true
+            timeout:
+              minutes: 2
       - if:
           - '{{ input_run_during_backup is string and input_run_during_backup | length > 0 }}'
           - '{{ not is_state(input_run_during_backup, "idle") }}'
@@ -1845,6 +1861,7 @@ action:
   - alias: Set ON helper flag  # Updates are starting: from here on, a restart resumes this run
     if:
       - '{{ update_process_started_entity_id | length > 0 }}'
+      - '{{ is_there_anything_to_update }}'
       - condition: or
         conditions:
           - condition: template
@@ -2400,6 +2417,31 @@ action:
                 delay:
                   seconds: 15
 
+              - alias: Post-update actions before restart  # Only when the run won't resume after the restart
+                if:
+                  - '{{ installed_updates | count > 0 }}'
+                  - '{{ not post_update_actions_done }}'
+                  - >-
+                    {{
+                      update_process_started_entity_id | length < 1 or
+                      not is_state(update_process_started_entity_id, "on")
+                    }}
+                then:
+                  - &run_post_update_actions
+                    sequence:
+                      - variables:
+                          input_actions_pos_update: !input actions_pos_update
+                      - condition: '{{ input_actions_pos_update is sequence }}'
+                      - variables:
+                          log_message: "Running post-update actions"
+                      - *logbook_update
+
+                      - alias: "Run post-update actions"
+                        continue_on_error: true
+                        sequence: !input actions_pos_update
+                  - variables:
+                      post_update_actions_done: true
+
               - alias: "Restart - Call reboot service"
                 continue_on_error: true
                 action: '{{ "hassio.host_reboot" if input_restart_type == "host" else "homeassistant.restart" }}'
@@ -2413,18 +2455,14 @@ action:
           entity_id: !input update_process_started_entity
         continue_on_error: true
 
-  - alias: Post-update actions
-    sequence:
+  - alias: Post-update actions  # Only after something was installed, or when resuming after a restart
+    if:
+      - '{{ not post_update_actions_done }}'
+      - '{{ installed_updates | count > 0 or is_resume_after_restart }}'
+    then:
+      - *run_post_update_actions
       - variables:
-          input_actions_pos_update: !input actions_pos_update
-      - condition: '{{ input_actions_pos_update is sequence }}'
-      - variables:
-          log_message: "Running post-update actions"
-      - *logbook_update
-
-      - alias: "Run post-update actions"
-        continue_on_error: true
-        sequence: !input actions_pos_update
+          post_update_actions_done: true
 
   - alias: Done  # All done!
     if:

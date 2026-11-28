@@ -142,6 +142,8 @@ You can use this to send notifications, turn on/off devices or activate scenes a
 
 - Please be aware that all actions will run right before the update process, which can happens over-night. Take this in account when selecting your actions.
 - The variable `{{ pending_updates }}` is available for your automations and contains the list of pending updates.
+- These actions only run when at least one update was installed.
+  When this automation forces a restart, they run after the restart if the *"Update Process Started" toggle entity* is set, or right before the restart otherwise.
 - **IMPORTANT!** Some updates will automatically restart Home Assistant, causing the automation to interrupt before finishing.
   Set the *"Update Process Started" toggle entity* to resume the update process after the restart and run the post-update actions by the end of it.
   Without it, the post-update actions are not executed after a restart.
