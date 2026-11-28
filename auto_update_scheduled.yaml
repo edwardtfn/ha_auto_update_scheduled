@@ -1059,9 +1059,9 @@ variables:
   input_run_during_backup_cfg: !input run_during_backup
   input_last_backup_timestamp_entity_cfg: !input last_backup_timestamp_entity
   # One persistent notification per automation, replaced on each run and dismissed once fixed.
-  # Based on the automation's unique id, so it survives an entity id rename.
+  # Based on the automation's unique id (unchanged, to keep distinct ids distinct), so it survives an entity id rename.
   backup_misconfigured_notification_id: >-
-    auto_update_scheduled_{{ this.attributes.id | default(this.entity_id, true) | slugify }}_backup_misconfigured
+    auto_update_scheduled_{{ this.attributes.id | default(this.entity_id, true) }}_backup_misconfigured
 action:
   - alias: Dismiss the backup misconfigured notification  # Backup config is valid (no-op if not raised)
     if:
